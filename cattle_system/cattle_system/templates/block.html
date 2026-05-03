@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>접근 거부</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <style>
+        .error-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .error-box {
+            background: white;
+            padding: 60px 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+        }
+
+        .error-code {
+            font-size: 72px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin-bottom: 20px;
+        }
+
+        .error-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .error-message {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .error-details {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: left;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .error-details p {
+            margin: 8px 0;
+        }
+
+        .error-details strong {
+            color: #333;
+        }
+
+        .back-button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        .back-button:hover {
+            background-color: #5568d3;
+        }
+
+        .logout-button {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 12px 30px;
+            background-color: #e74c3c;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+
+        .logout-button:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-box">
+            <div class="error-code">403</div>
+            <div class="error-title">접근이 거부되었습니다</div>
+            <div class="error-message">
+                죄송합니다. 이 페이지에 접근할 권한이 없습니다.
+            </div>
+            <div class="error-details">
+                <p><strong>사용자:</strong> {{ username or "Unknown" }}</p>
+                <p><strong>권한:</strong> {{ userpermit or "None" }}</p>
+                <p><strong>요청된 페이지:</strong> {{ requested_page or "Unknown" }}</p>
+            </div>
+            <div>
+                <a href="/" class="back-button">메인 페이지로 돌아가기</a>
+                <a href="/logout" class="logout-button">로그아웃</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

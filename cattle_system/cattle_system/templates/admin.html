@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 페이지</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="{{ url_for('static', filename='js/admin.js') }}" defer></script>
+</head>
+<body>
+    <header>
+        <div class="logo">Cattle Admin</div>
+        <div class="header-title">관리자 대시보드</div>
+        <div class="user-info">
+            <span>{{ username or "Error" }} | {{ userpermit or "Error" }}</span>
+            <div class="menu">
+                <input type="checkbox" id="menu-toggle">
+                <label for="menu-toggle" class="menu-icon">☰</label>
+                <div class="sidebar">
+                    <p class="sidebar-user">{{ username or "Error" }}</p>
+                    <a href="/logout">로그아웃</a>
+                    <a href="/">대시보드</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <section class="account_board">
+            <h2>계정 관리</h2>
+            <div id="account-container">
+                <form id="accountForm">
+                    <input type="text" id="accountId" placeholder="아이디" required>
+                    <input type="text" id="accountName" placeholder="이름" required>
+                    <input type="password" id="accountPassword" placeholder="비밀번호" required>
+                    <select id="accountPermit" required>
+                        <option value="User">User</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Super">Super</option>
+                    </select>
+                    <button type="submit">계정 추가</button>
+                </form>
+                <table>
+                    <thead>
+                        <tr><th>아이디</th><th>이름</th><th>권한</th><th>작업</th></tr>
+                    </thead>
+                    <tbody id="account_list"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rule_board">
+            <h2>소 데이터 관리</h2>
+            <div id="rule-container">
+                <form id="cattleForm">
+                    <input type="text" id="cattleId" placeholder="소 ID" required>
+                    <input type="text" id="cattleName" placeholder="소 이름" required>
+                    <input type="text" id="ownerName" placeholder="소유자명 또는 소유기업" required>
+                    <input type="text" id="note" placeholder="비고">
+                    <button type="submit">소 데이터 추가</button>
+                </form>
+                <table>
+                    <thead>
+                        <tr><th>소 ID</th><th>이름</th><th>소유자</th><th>비고</th><th>삭제</th></tr>
+                    </thead>
+                    <tbody id="cattle_list"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

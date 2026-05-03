@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사진 업로드</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+</head>
+<body>
+    <header>
+        <div class="logo">Cattle System</div>
+        <div class="header-title">사진 업로드</div>
+    </header>
+
+    <main class="page-content">
+        <section class="upload-card">
+            <h2>소 사진 업로드</h2>
+            <form method="post" enctype="multipart/form-data">
+                <label for="image">이미지 선택</label>
+                <input type="file" id="image" name="image" accept="image/*" required>
+                <button type="submit">업로드</button>
+            </form>
+
+            {% if error %}
+                <p class="error">{{ error }}</p>
+            {% endif %}
+
+            {% if result %}
+                <div class="result-card">
+                    <h3>업로드 결과</h3>
+                    <p><strong>소 ID:</strong> {{ result.cattle_id }}</p>
+                    <p><strong>이름:</strong> {{ result.name }}</p>
+                    <p><strong>상태:</strong> {{ result.status }}</p>
+                    <p><strong>신뢰도:</strong> {{ result.confidence }}</p>
+                    <p><strong>등록 일시:</strong> {{ result.timestamp }}</p>
+                    <p><strong>비고:</strong> {{ result.note }}</p>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
