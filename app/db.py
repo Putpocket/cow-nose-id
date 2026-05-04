@@ -4,7 +4,9 @@
 
 import os  # 환경변수 사용을 위한 라이브러리
 import psycopg2  # PostgreSQL 연결 라이브러리
+from dotenv import load_dotenv  # 추가
 
+load_dotenv()
 
 # ==============================
 # DB 연결 설정
@@ -12,11 +14,11 @@ import psycopg2  # PostgreSQL 연결 라이브러리
 
 # 환경변수에서 DB 접속 정보 가져오기
 # (.env 파일에 저장된 값을 불러옴)
-DB_HOST = os.getenv("DB_HOST")        # DB 서버 주소
-DB_NAME = os.getenv("DB_NAME")        # 사용할 DB 이름
-DB_USER = os.getenv("DB_USER")        # DB 사용자명
-DB_PASSWORD = os.getenv("DB_PASSWORD")# DB 비밀번호
-DB_PORT = os.getenv("DB_PORT")        # 포트 번호
+DB_HOST = os.getenv("DB_HOST", "").strip()
+DB_NAME = os.getenv("DB_NAME", "").strip()
+DB_USER = os.getenv("DB_USER", "").strip()
+DB_PASSWORD = os.getenv("DB_PASSWORD", "").strip()
+DB_PORT = os.getenv("DB_PORT", "").strip()
 
 
 # ==============================
@@ -86,3 +88,4 @@ def get_cow_info(cow_id):
         # 커서와 연결을 반드시 닫아야 함 (자원 누수 방지)
         cursor.close()
         conn.close()
+

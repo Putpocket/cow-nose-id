@@ -1,7 +1,7 @@
 # ==============================
 # DB 조회 함수 import
 # ==============================
-from services.db.postgres import get_cow_info
+from app.db import get_cow_info
 
 
 # ==============================
