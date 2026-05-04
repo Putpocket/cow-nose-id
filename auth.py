@@ -1,13 +1,10 @@
-# 비밀번호 해시 라이브러리
-from passlib.context import CryptContext
+from app.security import hash_password as _hash_password
+from app.security import verify_password as _verify_password
 
-# bcrypt 방식 사용
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# 비밀번호 해시 함수
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    return _hash_password(password)
 
-# 비밀번호 검증 함수
+
 def verify_password(plain, hashed):
-    return pwd_context.verify(plain, hashed)
+    return _verify_password(hashed, plain)

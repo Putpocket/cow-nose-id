@@ -1,24 +1,5 @@
-# ==============================
-# 환경변수 및 DB 라이브러리 import
-# ==============================
-
-import os  # 환경변수 사용을 위한 라이브러리
 import psycopg2  # PostgreSQL 연결 라이브러리
-from dotenv import load_dotenv  # 추가
-
-load_dotenv()
-
-# ==============================
-# DB 연결 설정
-# ==============================
-
-# 환경변수에서 DB 접속 정보 가져오기
-# (.env 파일에 저장된 값을 불러옴)
-DB_HOST = os.getenv("DB_HOST", "").strip()
-DB_NAME = os.getenv("DB_NAME", "").strip()
-DB_USER = os.getenv("DB_USER", "").strip()
-DB_PASSWORD = os.getenv("DB_PASSWORD", "").strip()
-DB_PORT = os.getenv("DB_PORT", "").strip()
+from app.config import settings
 
 
 # ==============================
@@ -30,12 +11,14 @@ def get_connection():
     PostgreSQL DB 연결을 생성하는 함수
     요청마다 새로운 연결을 생성하는 방식 (안전한 방식)
     """
+    if settings.database_url:
+        return psycopg2.connect(settings.database_url)
     return psycopg2.connect(
-        host=DB_HOST,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        port=DB_PORT
+        host=settings.db_host,
+        database=settings.db_name,
+        user=settings.db_user,
+        password=settings.db_password,
+        port=settings.db_port
     )
 
 
@@ -80,12 +63,47 @@ def get_cow_info(cow_id):
             "name": data[1]
         }
 
-    except Exception as e:
-        # DB 오류 발생 시 에러 메시지 반환
-        return {"error": str(e)}
+    except Exception:
+        return {"error": "database error"}
 
     finally:
         # 커서와 연결을 반드시 닫아야 함 (자원 누수 방지)
         cursor.close()
         conn.close()
 
+
+def add_audit_log(
+    action,
+    user_id=None,
+    username=None,
+    target_type=None,
+    target_id=None,
+    ip_address=None,
+    user_agent=None,
+    detail=None,
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO audit_logs (
+                user_id,
+                username,
+                action,
+                target_type,
+                target_id,
+                ip_address,
+                user_agent,
+                detail
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, username, action, target_type, target_id, ip_address, user_agent, detail),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
