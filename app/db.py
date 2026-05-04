@@ -1,91 +1,77 @@
-# ==============================
-# 환경변수 및 DB 라이브러리 import
-# ==============================
-
-import os  # 환경변수 사용을 위한 라이브러리
-import psycopg2  # PostgreSQL 연결 라이브러리
-from dotenv import load_dotenv  # 추가
-
-load_dotenv()
-
-# ==============================
-# DB 연결 설정
-# ==============================
-
-# 환경변수에서 DB 접속 정보 가져오기
-# (.env 파일에 저장된 값을 불러옴)
-DB_HOST = os.getenv("DB_HOST", "").strip()
-DB_NAME = os.getenv("DB_NAME", "").strip()
-DB_USER = os.getenv("DB_USER", "").strip()
-DB_PASSWORD = os.getenv("DB_PASSWORD", "").strip()
-DB_PORT = os.getenv("DB_PORT", "").strip()
-
-
-# ==============================
-# DB 연결 함수
-# ==============================
+# app/db.py
+import psycopg2
+from app.config import settings
 
 def get_connection():
     """
-    PostgreSQL DB 연결을 생성하는 함수
-    요청마다 새로운 연결을 생성하는 방식 (안전한 방식)
+    PostgreSQL DB 연결 생성 (설정값 기반)
     """
+    if settings.database_url:
+        return psycopg2.connect(settings.database_url)
+    
     return psycopg2.connect(
-        host=DB_HOST,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        port=DB_PORT
+        host=settings.db_host,
+        database=settings.db_name,
+        user=settings.db_user,
+        password=settings.db_password,
+        port=settings.db_port
     )
-
-
-# ==============================
-# 소 정보 조회 함수
-# ==============================
 
 def get_cow_info(cow_id):
     """
-    cow_id를 기반으로 DB에서 소 정보를 조회하는 함수
-
-    Args:
-        cow_id (int): 조회할 소의 ID
-
-    Returns:
-        dict: 소 정보 또는 에러 메시지
+    cow_id를 기반으로 소 및 소유주 정보 조회
     """
-
-    # DB 연결 생성
     conn = get_connection()
-
-    # 커서 생성 (DB 작업을 수행하는 객체)
     cursor = conn.cursor()
-
     try:
-        # SQL 실행 (%s 사용 → SQL 인젝션 방지)
-        cursor.execute(
-            "SELECT cow_id, name FROM cows WHERE cow_id=%s",
-            (cow_id,)
-        )
-
-        # 결과 한 개 가져오기
+        # 조장님 피드백 반영: 소유주 정보까지 JOIN으로 가져오기
+        query = """
+            SELECT c.cow_id, c.name, c.ear_tag, c.breed, o.name as owner_name
+            FROM cows c
+            LEFT JOIN owners o ON c.owner_id = o.owner_id
+            WHERE c.cow_id = %s
+        """
+        cursor.execute(query, (cow_id,))
         data = cursor.fetchone()
 
-        # 데이터가 없는 경우
         if data is None:
-            return {"error": "cow not found"}
+            return None
 
-        # 결과를 JSON 형태로 반환
         return {
             "cow_id": data[0],
-            "name": data[1]
+            "name": data[1],
+            "ear_tag": data[2],
+            "breed": data[3],
+            "owner_name": data[4]
         }
-
-    except Exception as e:
-        # DB 오류 발생 시 에러 메시지 반환
-        return {"error": str(e)}
-
+    except Exception:
+        return {"error": "database error"}
     finally:
-        # 커서와 연결을 반드시 닫아야 함 (자원 누수 방지)
         cursor.close()
         conn.close()
 
+def add_audit_log(action, user_id=None, username=None, target_type=None, 
+                  target_id=None, ip_address=None, user_agent=None, detail=None):
+    """
+    주요 작업에 대한 감사 로그 기록 (조장님 피드백 10번 반영)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        query = """
+            INSERT INTO audit_logs (
+                user_id, username, action, target_type, target_id, 
+                ip_address, user_agent, detail
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (
+            user_id, username, action, target_type, 
+            target_id, ip_address, user_agent, detail
+        ))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
