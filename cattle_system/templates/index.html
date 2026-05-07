@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cattle Recognition System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+</head>
+<body>
+    <header>
+        <div class="logo">Cattle System</div>
+        <div class="header-title">Cattle Dashboard</div>
+        <div class="user-info">
+            <span>{{ username or "Error" }} | {{ userpermit or "Error" }}</span>
+            <div class="menu">
+                <input type="checkbox" id="menu-toggle">
+                <label for="menu-toggle" class="menu-icon">☰</label>
+                <div class="sidebar">
+                    <p class="sidebar-user">{{ username or "Error" }}</p>
+                    <a href="/logout">로그아웃</a>
+                    <a href="/upload">사진 업로드</a>
+                    {% if Admin %}
+                    <a href="/admin_pages">관리자 페이지</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <div class="boards-row">
+            <div id="main_packet_board">
+                <h2>소 데이터 목록</h2>
+                <div class="filter-bar">
+                    <input type="text" id="packetFilter" placeholder="예: 소 ID, 소 이름">
+                    <button id="applyPacketFilter">🔍</button>
+                </div>
+                <div class="table-header">
+                    <p>소 ID</p><p>이름</p><p>상태</p><p>신뢰도</p><p>분석 일시</p>
+                </div>
+                <div id="packet_data" class="data-table"></div>
+            </div>
+
+            <div id="main_event_board">
+                <h2>최근 추가된 데이터</h2>
+                <div class="filter-bar">
+                    <input type="text" id="eventFilter" placeholder="예: 소 ID, 소 이름, 소유자">
+                    <button id="applyEventFilter">🔍</button>
+                </div>
+                <div class="table-header">
+                    <p>등록 일시</p><p>소 ID</p><p>이름</p><p>소유자</p><p>비고</p>
+                </div>
+                <div id="event_data" class="data-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main_footer">
+        <div class="footer-item">Version: 1.0</div>
+        <div class="footer-item">Server IP: {{ cip or "Error" }}</div>
+        <div class="footer-item">시스템 상태</div>
+        <div class="footer-item">&nbsp;</div>
+    </div>
+
+    <script>
+        const cattleData = JSON.parse('{{ cattle_data | tojson | safe }}');
+        const recentAddedData = JSON.parse('{{ recent_data | tojson | safe }}');
+    </script>
+    <script src="{{ url_for('static', filename='js/index.js') }}" defer></script>
+</body>
+</html>
