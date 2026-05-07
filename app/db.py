@@ -1,6 +1,10 @@
-# app/db.py
-import psycopg2
+import psycopg2  # PostgreSQL 연결 라이브러리
 from app.config import settings
+
+
+# ==============================
+# DB 연결 함수
+# ==============================
 
 def get_connection():
     """
@@ -8,7 +12,6 @@ def get_connection():
     """
     if settings.database_url:
         return psycopg2.connect(settings.database_url)
-    
     return psycopg2.connect(
         host=settings.db_host,
         database=settings.db_name,
@@ -39,36 +42,46 @@ def get_cow_info(cow_id):
 
         return {
             "cow_id": data[0],
-            "name": data[1],
-            "ear_tag": data[2],
-            "breed": data[3],
-            "owner_name": data[4]
+            "name": data[1]
         }
+
     except Exception:
         return {"error": "database error"}
+
     finally:
         cursor.close()
         conn.close()
 
-def add_audit_log(action, user_id=None, username=None, target_type=None, 
-                  target_id=None, ip_address=None, user_agent=None, detail=None):
-    """
-    주요 작업에 대한 감사 로그 기록 (조장님 피드백 10번 반영)
-    """
+
+def add_audit_log(
+    action,
+    user_id=None,
+    username=None,
+    target_type=None,
+    target_id=None,
+    ip_address=None,
+    user_agent=None,
+    detail=None,
+):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        query = """
+        cursor.execute(
+            """
             INSERT INTO audit_logs (
-                user_id, username, action, target_type, target_id, 
-                ip_address, user_agent, detail
+                user_id,
+                username,
+                action,
+                target_type,
+                target_id,
+                ip_address,
+                user_agent,
+                detail
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(query, (
-            user_id, username, action, target_type, 
-            target_id, ip_address, user_agent, detail
-        ))
+            """,
+            (user_id, username, action, target_type, target_id, ip_address, user_agent, detail),
+        )
         conn.commit()
     except Exception:
         conn.rollback()
