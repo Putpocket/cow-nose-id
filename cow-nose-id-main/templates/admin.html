@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 | Cattle System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+  <script src="{{ url_for('static', filename='js/admin.js') }}" defer></script>
+</head>
+<body>
+  <header>
+    <div class="logo">Cattle Admin</div>
+    <div class="header-title">관리자 화면</div>
+    <div class="user-info">
+      <span id="currentUser">확인 중</span>
+      <div class="menu">
+        <input type="checkbox" id="menu-toggle">
+        <label for="menu-toggle" class="menu-icon">메뉴</label>
+        <div class="sidebar">
+          <p id="sidebarUser" class="sidebar-user">확인 중</p>
+          <a href="/">식별</a>
+          <a href="/admin">관리자</a>
+          <button type="button" id="logoutButton">로그아웃</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <section class="account_board">
+      <div class="section-heading">
+        <h2>계정 관리</h2>
+        <p>관리자가 사용자 계정을 생성하고 삭제합니다.</p>
+      </div>
+      <form id="accountForm">
+        <input type="text" id="accountUsername" placeholder="아이디" autocomplete="off" required>
+        <input type="password" id="accountPassword" placeholder="임시 비밀번호" autocomplete="new-password" required>
+        <select id="accountRole" required>
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+          <option value="super">super</option>
+        </select>
+        <button type="submit">계정 생성</button>
+      </form>
+      <p id="accountMessage" class="form-message" role="status"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>아이디</th><th>권한</th><th>상태</th><th>작업</th></tr>
+          </thead>
+          <tbody id="accountList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="rule_board">
+      <div class="section-heading">
+        <h2>소 데이터 관리</h2>
+        <p>소 정보와 소유주 정보를 관리합니다.</p>
+      </div>
+      <form id="cowForm">
+        <input type="hidden" id="cowId">
+        <input type="text" id="cowName" placeholder="소 이름">
+        <input type="text" id="earTag" placeholder="이표 번호" required>
+        <input type="text" id="ownerName" placeholder="소유자명">
+        <input type="text" id="breed" placeholder="품종">
+        <input type="text" id="sex" placeholder="성별">
+        <input type="date" id="birthDate" aria-label="생년월일">
+        <input type="text" id="notes" placeholder="비고">
+        <button type="submit">소 저장</button>
+        <button type="button" id="resetCowForm">입력 초기화</button>
+      </form>
+      <p id="cowMessage" class="form-message" role="status"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>이표</th><th>이름</th><th>소유자</th><th>비고</th><th>작업</th></tr>
+          </thead>
+          <tbody id="cowList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="status_board">
+      <div class="section-heading">
+        <h2>운영 상태</h2>
+        <p>로그, 백업, 인덱스 갱신 상태는 백엔드 API 확정 후 연결합니다.</p>
+      </div>
+      <div class="status-grid">
+        <div><strong>로그</strong><span>백엔드 연결 대기</span></div>
+        <div><strong>백업</strong><span>백엔드 연결 대기</span></div>
+        <div><strong>인덱스</strong><span>백엔드 연결 대기</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,126 @@
+@import url("/static/css/index.css");
+
+.dashboard {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 32px 24px 48px;
+}
+
+.account_board,
+.rule_board,
+.status_board {
+  background: #fff;
+  border: 1px solid #dce5ed;
+  box-shadow: 0 8px 22px rgba(36, 49, 63, 0.06);
+  padding: 24px;
+}
+
+.status_board {
+  grid-column: 1 / -1;
+}
+
+#accountForm,
+#cowForm {
+  background: #f7fafc;
+  border: 1px solid #e3e9ef;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+#accountForm {
+  grid-template-columns: 1fr 1fr;
+}
+
+#accountForm button {
+  grid-column: 1 / -1;
+}
+
+#cowForm {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#cowForm button {
+  min-width: 0;
+}
+
+.table-wrap {
+  margin-top: 16px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 100%;
+  width: max-content;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e3e9ef;
+  font-size: 14px;
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background: #f7fafc;
+  color: #0f4c81;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+}
+
+td button {
+  margin-right: 6px;
+  padding: 8px 10px;
+}
+
+td button + button {
+  background: #b42318;
+}
+
+td button + button:hover {
+  background: #8f1c13;
+}
+
+.status-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.status-grid div {
+  background: #f7fafc;
+  border-left: 4px solid #0f4c81;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.status-grid span {
+  color: #637181;
+  font-size: 14px;
+}
+
+@media (max-width: 980px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  #accountForm,
+  #cowForm {
+    grid-template-columns: 1fr;
+  }
+}
