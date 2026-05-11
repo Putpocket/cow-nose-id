@@ -1,50 +1,26 @@
-# ==============================
-# DB 조회 함수 import
-# ==============================
 from app.db import get_cow_info
+from app.services.crop import crop_image
+from app.services.dino import extract_vector
+from app.services.faiss_search import search_similar
+from app.services.yolo import detect_nose
 
 
-# ==============================
-# 전체 이미지 처리 파이프라인
-# ==============================
 def process_image(image_path):
+    """Best-effort pipeline wiring.
+
+    This keeps current lightweight service stubs but executes real flow steps
+    and returns structured JSON for frontend integration.
     """
-    이미지 처리 전체 파이프라인 (현재는 더미 기반)
-
-    Args:
-        image_path (str): 업로드된 이미지 경로
-
-    Returns:
-        dict: 소 정보
-    """
-
-    # ======================
-    # 1. YOLO (더미)
-    # ======================
-    # 실제로는 detect_nose(image_path)
-    bbox = [10, 10, 100, 100]
-
-    # ======================
-    # 2. Crop (더미)
-    # ======================
-    # 실제로는 crop_image(image_path, bbox)
-    cropped = image_path
-
-    # ======================
-    # 3. DINO (더미 벡터)
-    # ======================
-    # 실제로는 extract_vector(cropped)
-    vector = [0.1, 0.2, 0.3]
-
-    # ======================
-    # 4. FAISS (더미 결과)
-    # ======================
-    # 실제로는 search_similar(vector)
-    cow_id = 1
-
-    # ======================
-    # 5. DB 조회
-    # ======================
+    bbox = detect_nose(image_path)
+    cropped = crop_image(image_path, bbox)
+    vector = extract_vector(cropped)
+    cow_id = search_similar(vector)
     cow_info = get_cow_info(cow_id)
 
-    return cow_info
+    matched = "error" not in cow_info
+    return {
+        "matched": matched,
+        "cow_id": cow_id if matched else None,
+        "bbox": bbox,
+        "cow": cow_info if matched else None,
+    }
