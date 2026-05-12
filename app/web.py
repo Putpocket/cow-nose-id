@@ -139,7 +139,7 @@ def create_app():
             return jsonify({"error": "login required"}), 401
 
     def require_admin():
-        if not session.get("is_admin"):
+        if session.get("role") not in {"admin", "super"}:
             audit("admin_required", ok=False)
             return jsonify({"error": "admin required"}), 403
 
@@ -222,11 +222,12 @@ def create_app():
             session.clear()
             session["user_id"] = user_id
             session["username"] = username
-            session["is_admin"] = role == "admin"
+            session["role"] = role
+            session["is_admin"] = role in {"admin", "super"}
             session.permanent = True
             session["csrf_token"] = secrets.token_urlsafe(32)
             audit("login", target=username, ok=True)
-            return jsonify({"message": "ok", "csrf_token": session["csrf_token"], "is_admin": session["is_admin"]})
+            return jsonify({"message": "ok", "csrf_token": session["csrf_token"], "role": role, "is_admin": session["is_admin"]})
 
 
     @app.get("/auth/me")
@@ -234,7 +235,7 @@ def create_app():
         require = require_login()
         if require:
             return require
-        return jsonify({"user_id": session.get("user_id"), "username": session.get("username"), "role": "admin" if session.get("is_admin") else "user"})
+        return jsonify({"user_id": session.get("user_id"), "username": session.get("username"), "role": session.get("role", "user")})
 
     @app.get("/me")
     def me_alias():
@@ -280,9 +281,11 @@ def create_app():
             if check:
                 return check
         with _db_connection() as conn, conn.cursor() as cur:
-            cur.execute("SELECT user_id, username, role, is_active, created_at FROM users ORDER BY user_id DESC")
+            cols = _user_columns(conn)
+            active_expr = "CASE WHEN status='active' THEN TRUE ELSE FALSE END" if "status" in cols else "is_active"
+            cur.execute(f"SELECT user_id, username, role, {active_expr} AS is_active, created_at FROM users ORDER BY user_id DESC")
             rows = cur.fetchall()
-        return jsonify([{"user_id": r[0], "username": r[1], "role": r[2], "is_active": r[3], "created_at": r[4].isoformat() if r[4] else None} for r in rows])
+        return jsonify([{"user_id": r[0], "username": r[1], "role": r[2], "is_active": bool(r[3]), "created_at": r[4].isoformat() if r[4] else None} for r in rows])
 
     @app.get("/api/admin/accounts")
     def list_accounts_api_alias():
@@ -364,7 +367,11 @@ def create_app():
             if check:
                 return check
         with _db_connection() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE users SET is_active=FALSE WHERE user_id=%s", (user_id,))
+            cols = _user_columns(conn)
+            if "status" in cols:
+                cur.execute("UPDATE users SET status='inactive' WHERE user_id=%s", (user_id,))
+            else:
+                cur.execute("UPDATE users SET is_active=FALSE WHERE user_id=%s", (user_id,))
         audit("user_disable", target=str(user_id), ok=True)
         return jsonify({"message": "disabled"})
 
@@ -374,7 +381,11 @@ def create_app():
             if check:
                 return check
         with _db_connection() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE users SET is_active=TRUE WHERE user_id=%s", (user_id,))
+            cols = _user_columns(conn)
+            if "status" in cols:
+                cur.execute("UPDATE users SET status='active' WHERE user_id=%s", (user_id,))
+            else:
+                cur.execute("UPDATE users SET is_active=TRUE WHERE user_id=%s", (user_id,))
         audit("user_enable", target=str(user_id), ok=True)
         return jsonify({"message": "enabled"})
 
@@ -485,7 +496,11 @@ def create_app():
             cur.execute("SELECT user_id FROM users WHERE username=%s", (admin_user,))
             if not cur.fetchone():
                 pw_hash = generate_password_hash(admin_pw)
-                cur.execute("INSERT INTO users (username, password_hash, role, is_active) VALUES (%s, %s, 'admin', TRUE)", (admin_user, pw_hash))
+                cols = _user_columns(conn)
+                if "status" in cols:
+                    cur.execute("INSERT INTO users (username, password_hash, role, status) VALUES (%s, %s, 'admin', 'active')", (admin_user, pw_hash))
+                else:
+                    cur.execute("INSERT INTO users (username, password_hash, role, is_active) VALUES (%s, %s, 'admin', TRUE)", (admin_user, pw_hash))
                 cur.execute("INSERT INTO password_history (user_id, password_hash) SELECT user_id, password_hash FROM users WHERE username=%s", (admin_user,))
                 app.logger.info("bootstrap admin created")
     except Exception:
