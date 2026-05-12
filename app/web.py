@@ -8,7 +8,7 @@ from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, session
+from flask import Flask, current_app, g, has_request_context, jsonify, request, session
 from PIL import Image
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
@@ -43,6 +43,41 @@ def _db_connection():
     )
 
 
+
+
+def _table_columns(conn, table_name: str):
+    with conn.cursor() as cur:
+        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name=%s", (table_name,))
+        return {r[0] for r in cur.fetchall()}
+
+
+def _user_columns(conn):
+    if has_request_context() and getattr(g, "_users_cols", None) is not None:
+        return g._users_cols
+    cols = _table_columns(conn, "users")
+    if has_request_context():
+        g._users_cols = cols
+    return cols
+
+
+def _audit_columns(conn):
+    if has_request_context() and getattr(g, "_audit_cols", None) is not None:
+        return g._audit_cols
+    cols = _table_columns(conn, "audit_logs")
+    if has_request_context():
+        g._audit_cols = cols
+    return cols
+
+
+def _lock_state_from_row(row: dict):
+    status = row.get("status")
+    if status is not None:
+        is_active = str(status).lower() in {"active", "enabled", "true", "1"}
+    else:
+        is_active = bool(row.get("is_active", True))
+    attempts = row.get("failed_attempts") if row.get("failed_attempts") is not None else row.get("login_attempts", 0)
+    return is_active, int(attempts or 0)
+
 def create_app():
     load_dotenv()
     app = Flask(__name__)
@@ -66,12 +101,35 @@ def create_app():
 
     def audit(action: str, target: str = "", ok: bool = True, detail: str = ""):
         user_id = session.get("user_id")
+        username = session.get("username")
         status = "ok" if ok else "fail"
         message = f"{action} {status} target={target} user_id={user_id} {detail}".strip()
         app.logger.info(message)
         try:
-            with _db_connection() as conn, conn.cursor() as cur:
-                cur.execute("INSERT INTO audit_logs (user_id, action) VALUES (%s, %s)", (user_id, message))
+            with _db_connection() as conn:
+                cols = _audit_columns(conn)
+                payload = {}
+                if "user_id" in cols:
+                    payload["user_id"] = user_id
+                if "username" in cols:
+                    payload["username"] = username
+                if "action" in cols:
+                    payload["action"] = action
+                if "target_type" in cols:
+                    payload["target_type"] = "api"
+                if "target_id" in cols:
+                    payload["target_id"] = target
+                if "ip_address" in cols:
+                    payload["ip_address"] = request.remote_addr if has_request_context() else None
+                if "user_agent" in cols:
+                    payload["user_agent"] = request.headers.get("User-Agent", "") if has_request_context() else ""
+                if "detail" in cols:
+                    payload["detail"] = message
+                if payload:
+                    keys = list(payload.keys())
+                    sql = f"INSERT INTO audit_logs ({', '.join(keys)}) VALUES ({', '.join(['%s']*len(keys))})"
+                    with conn.cursor() as cur:
+                        cur.execute(sql, [payload[k] for k in keys])
         except Exception:
             app.logger.exception("audit_log_insert_failed")
 
@@ -122,12 +180,27 @@ def create_app():
         username = (payload.get("username") or "").strip()
         password = payload.get("password") or ""
         with _db_connection() as conn, conn.cursor() as cur:
-            cur.execute("SELECT user_id, password_hash, role, is_active, login_attempts, locked_until FROM users WHERE username=%s", (username,))
+            cols = _user_columns(conn)
+            select_cols = ["user_id", "password_hash", "role", "locked_until"]
+            if "status" in cols:
+                select_cols.append("status")
+            if "failed_attempts" in cols:
+                select_cols.append("failed_attempts")
+            if "is_active" in cols:
+                select_cols.append("is_active")
+            if "login_attempts" in cols:
+                select_cols.append("login_attempts")
+            cur.execute(f"SELECT {', '.join(select_cols)} FROM users WHERE username=%s", (username,))
             row = cur.fetchone()
             if not row:
                 audit("login", target=username, ok=False, detail="no_user")
                 return jsonify({"error": "invalid credentials"}), 401
-            user_id, password_hash, role, is_active, attempts, locked_until = row
+            data = dict(zip(select_cols, row))
+            user_id = data["user_id"]
+            password_hash = data["password_hash"]
+            role = data.get("role", "user")
+            locked_until = data.get("locked_until")
+            is_active, attempts = _lock_state_from_row(data)
             now = datetime.now(timezone.utc)
             if locked_until and locked_until.replace(tzinfo=timezone.utc) > now:
                 audit("login", target=username, ok=False, detail="locked")
@@ -137,11 +210,15 @@ def create_app():
                 lock_seconds = _int_env("LOGIN_LOCKOUT_SECONDS", 900)
                 attempts += 1
                 lock_until = now + timedelta(seconds=lock_seconds) if attempts >= max_attempts else None
-                cur.execute("UPDATE users SET login_attempts=%s, locked_until=%s WHERE user_id=%s", (attempts, lock_until, user_id))
+                if "failed_attempts" in cols:
+                    cur.execute("UPDATE users SET failed_attempts=%s, locked_until=%s WHERE user_id=%s", (attempts, lock_until, user_id))
+                else:
+                    cur.execute("UPDATE users SET login_attempts=%s, locked_until=%s WHERE user_id=%s", (attempts, lock_until, user_id))
                 audit("login", target=username, ok=False, detail="bad_password_or_inactive")
                 return jsonify({"error": "invalid credentials"}), 401
 
-            cur.execute("UPDATE users SET login_attempts=0, locked_until=NULL WHERE user_id=%s", (user_id,))
+            reset_col = "failed_attempts" if "failed_attempts" in cols else "login_attempts"
+            cur.execute(f"UPDATE users SET {reset_col}=0, locked_until=NULL WHERE user_id=%s", (user_id,))
             session.clear()
             session["user_id"] = user_id
             session["username"] = username
@@ -389,15 +466,22 @@ def create_app():
         file.save(target)
         os.chmod(target, int(os.getenv("UPLOAD_FILE_MODE", "0o640"), 8))
         audit("upload", target=str(target), ok=True)
-        result = process_image(str(target))
+        try:
+            result = process_image(str(target))
+        except Exception as exc:
+            current_app.logger.exception("identify_pipeline_failed")
+            audit("identify", target=str(target), ok=False, detail=str(exc))
+            return jsonify({"error": "identify failed"}), 500
         return jsonify(result)
 
 
     # bootstrap admin account
     try:
         with _db_connection() as conn, conn.cursor() as cur:
-            admin_user = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
-            admin_pw = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "admin")
+            admin_user = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "").strip()
+            admin_pw = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "").strip()
+            if not admin_user or not admin_pw:
+                return app
             cur.execute("SELECT user_id FROM users WHERE username=%s", (admin_user,))
             if not cur.fetchone():
                 pw_hash = generate_password_hash(admin_pw)
