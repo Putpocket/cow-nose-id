@@ -69,12 +69,9 @@ def _audit_columns(conn):
 
 
 def _lock_state_from_row(row: dict):
-    status = row.get("status")
-    if status is not None:
-        is_active = str(status).lower() in {"active", "enabled", "true", "1"}
-    else:
-        is_active = bool(row.get("is_active", True))
-    attempts = row.get("failed_attempts") if row.get("failed_attempts") is not None else row.get("login_attempts", 0)
+    status = str(row.get("status") or "").lower()
+    is_active = status == "active"
+    attempts = row.get("failed_attempts", 0)
     return is_active, int(attempts or 0)
 
 def create_app():
@@ -179,17 +176,8 @@ def create_app():
         username = (payload.get("username") or "").strip()
         password = payload.get("password") or ""
         with _db_connection() as conn, conn.cursor() as cur:
-            cols = _user_columns(conn)
-            select_cols = ["user_id", "password_hash", "role", "locked_until"]
-            if "status" in cols:
-                select_cols.append("status")
-            if "failed_attempts" in cols:
-                select_cols.append("failed_attempts")
-            if "is_active" in cols:
-                select_cols.append("is_active")
-            if "login_attempts" in cols:
-                select_cols.append("login_attempts")
-            cur.execute(f"SELECT {', '.join(select_cols)} FROM users WHERE username=%s", (username,))
+            select_cols = ["user_id", "password_hash", "role", "status", "failed_attempts", "locked_until"]
+            cur.execute("SELECT user_id, password_hash, role, status, failed_attempts, locked_until FROM users WHERE username=%s", (username,))
             row = cur.fetchone()
             if not row:
                 audit("login", target=username, ok=False, detail="no_user")
@@ -209,15 +197,11 @@ def create_app():
                 lock_seconds = _int_env("LOGIN_LOCKOUT_SECONDS", 900)
                 attempts += 1
                 lock_until = now + timedelta(seconds=lock_seconds) if attempts >= max_attempts else None
-                if "failed_attempts" in cols:
-                    cur.execute("UPDATE users SET failed_attempts=%s, locked_until=%s WHERE user_id=%s", (attempts, lock_until, user_id))
-                else:
-                    cur.execute("UPDATE users SET login_attempts=%s, locked_until=%s WHERE user_id=%s", (attempts, lock_until, user_id))
+                cur.execute("UPDATE users SET failed_attempts=%s, locked_until=%s WHERE user_id=%s", (attempts, lock_until, user_id))
                 audit("login", target=username, ok=False, detail="bad_password_or_inactive")
                 return jsonify({"error": "invalid credentials"}), 401
 
-            reset_col = "failed_attempts" if "failed_attempts" in cols else "login_attempts"
-            cur.execute(f"UPDATE users SET {reset_col}=0, locked_until=NULL WHERE user_id=%s", (user_id,))
+            cur.execute("UPDATE users SET failed_attempts=0, locked_until=NULL WHERE user_id=%s", (user_id,))
             session.clear()
             session["user_id"] = user_id
             session["username"] = username
@@ -280,9 +264,7 @@ def create_app():
             if check:
                 return check
         with _db_connection() as conn, conn.cursor() as cur:
-            cols = _user_columns(conn)
-            active_expr = "CASE WHEN status='active' THEN TRUE ELSE FALSE END" if "status" in cols else "is_active"
-            cur.execute(f"SELECT user_id, username, role, {active_expr} AS is_active, created_at FROM users ORDER BY user_id DESC")
+            cur.execute("SELECT user_id, username, role, (status='active') AS is_active, created_at FROM users ORDER BY user_id DESC")
             rows = cur.fetchall()
         return jsonify([{"user_id": r[0], "username": r[1], "role": r[2], "is_active": bool(r[3]), "created_at": r[4].isoformat() if r[4] else None} for r in rows])
 
@@ -366,11 +348,7 @@ def create_app():
             if check:
                 return check
         with _db_connection() as conn, conn.cursor() as cur:
-            cols = _user_columns(conn)
-            if "status" in cols:
-                cur.execute("UPDATE users SET status='inactive' WHERE user_id=%s", (user_id,))
-            else:
-                cur.execute("UPDATE users SET is_active=FALSE WHERE user_id=%s", (user_id,))
+            cur.execute("UPDATE users SET status='disabled' WHERE user_id=%s", (user_id,))
         audit("user_disable", target=str(user_id), ok=True)
         return jsonify({"message": "disabled"})
 
@@ -380,11 +358,7 @@ def create_app():
             if check:
                 return check
         with _db_connection() as conn, conn.cursor() as cur:
-            cols = _user_columns(conn)
-            if "status" in cols:
-                cur.execute("UPDATE users SET status='active' WHERE user_id=%s", (user_id,))
-            else:
-                cur.execute("UPDATE users SET is_active=TRUE WHERE user_id=%s", (user_id,))
+            cur.execute("UPDATE users SET status='active' WHERE user_id=%s", (user_id,))
         audit("user_enable", target=str(user_id), ok=True)
         return jsonify({"message": "enabled"})
 
@@ -492,11 +466,7 @@ def create_app():
             cur.execute("SELECT user_id FROM users WHERE username=%s", (admin_user,))
             if not cur.fetchone():
                 pw_hash = generate_password_hash(admin_pw)
-                cols = _user_columns(conn)
-                if "status" in cols:
-                    cur.execute("INSERT INTO users (username, password_hash, role, status) VALUES (%s, %s, 'admin', 'active')", (admin_user, pw_hash))
-                else:
-                    cur.execute("INSERT INTO users (username, password_hash, role, is_active) VALUES (%s, %s, 'admin', TRUE)", (admin_user, pw_hash))
+                cur.execute("INSERT INTO users (username, password_hash, role, status) VALUES (%s, %s, 'admin', 'active')", (admin_user, pw_hash))
                 cur.execute("INSERT INTO password_history (user_id, password_hash) SELECT user_id, password_hash FROM users WHERE username=%s", (admin_user,))
                 app.logger.info("bootstrap admin created")
     except Exception:
