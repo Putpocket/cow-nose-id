@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UI Preview</title>
+    <link rel="stylesheet" href="styles.css?v=4" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <strong class="brand">비문 식별 관리</strong>
+        <a href="#identify">식별</a>
+        <a href="#register">소 등록</a>
+        <a href="#cow-list">소 목록</a>
+        <a href="#users">계정 관리</a>
+        <a href="#system">시스템</a>
+        <form>
+          <span>admin</span>
+          <button type="button" class="secondary-button">로그아웃</button>
+        </form>
+      </header>
+
+      <section id="identify" class="workspace">
+        <form class="upload-panel">
+          <div>
+            <h1>비문 식별</h1>
+          </div>
+          <label class="dropzone">
+            <strong>이미지 선택</strong>
+            <small>소 코 사진 파일을 업로드하세요.</small>
+          </label>
+          <button type="button">식별 시작</button>
+        </form>
+        <div class="preview-panel">
+          <div id="placeholder">이미지를 선택하면 미리보기가 표시됩니다.</div>
+        </div>
+      </section>
+
+      <section class="result-grid">
+        <div class="result-panel">
+          <h2>최상위 매칭</h2>
+          <div class="status">매칭 성공</div>
+          <dl class="info-list">
+            <dt>개체번호</dt><dd>KR-001</dd>
+            <dt>이름</dt><dd>한우 1호</dd>
+            <dt>품종</dt><dd>한우</dd>
+            <dt>소유주</dt><dd>홍길동</dd>
+            <dt>농장</dt><dd>서울농장</dd>
+          </dl>
+        </div>
+        <div class="result-panel">
+          <h2>유사도</h2>
+          <div class="score">86.4%</div>
+          <ol class="matches">
+            <li>cow_id 1 · 86.4%</li>
+            <li>cow_id 7 · 73.2%</li>
+            <li>cow_id 4 · 68.9%</li>
+          </ol>
+        </div>
+      </section>
+
+      <form id="register" class="form-panel preview-spacer">
+        <div>
+          <h1>소 등록</h1>
+        </div>
+        <section class="form-section">
+          <h2>소유주</h2>
+          <div class="form-grid">
+            <label><span>소유주명</span><input type="text" /></label>
+            <label><span>연락처</span><input type="text" /></label>
+            <label><span>농장명</span><input type="text" /></label>
+            <label><span>주소</span><input type="text" /></label>
+          </div>
+        </section>
+        <section class="form-section">
+          <h2>개체 정보</h2>
+          <div class="form-grid">
+            <label><span>개체번호</span><input type="text" /></label>
+            <label><span>이름</span><input type="text" /></label>
+            <label><span>품종</span><input type="text" /></label>
+            <label><span>성별</span><input type="text" /></label>
+            <label><span>생년월일</span><input type="date" /></label>
+            <label><span>비고</span><input type="text" /></label>
+          </div>
+        </section>
+        <section class="form-section">
+          <h2>비문 이미지</h2>
+          <label><span>소 코 사진 3~10장</span><input type="file" multiple /></label>
+        </section>
+        <button type="button">등록</button>
+      </form>
+
+      <section id="cow-list" class="result-panel preview-spacer">
+        <h1>소 목록</h1>
+        <table>
+          <thead>
+            <tr><th>개체번호</th><th>이름</th><th>품종</th><th>소유주</th><th>관리</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>KR-001</td><td>한우 1호</td><td>한우</td><td>홍길동</td>
+              <td class="table-actions">
+                <a class="link-button" href="#register">수정</a>
+                <button type="button" class="danger-button">삭제</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="users" class="admin-layout preview-spacer">
+        <form class="form-panel">
+          <div>
+            <h1>계정 추가</h1>
+          </div>
+          <label><span>아이디</span><input type="text" /></label>
+          <label><span>비밀번호</span><input type="password" /></label>
+          <label>
+            <span>권한</span>
+            <select>
+              <option>일반</option>
+              <option>관리자</option>
+            </select>
+          </label>
+          <button type="button">추가</button>
+        </form>
+        <section class="result-panel">
+          <h2>계정 목록</h2>
+          <table>
+            <thead>
+              <tr><th>아이디</th><th>권한</th><th>생성일</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>admin</td><td>관리자</td><td>활성</td></tr>
+              <tr><td>operator</td><td>일반</td><td>변경필요</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="system" class="admin-layout preview-spacer">
+        <section class="result-panel">
+          <h1>백업</h1>
+          <button type="button">지금 백업</button>
+          <table>
+            <thead><tr><th>파일</th><th>크기</th></tr></thead>
+            <tbody><tr><td>cow_nose_id-20260501-120000.dump</td><td>204800 bytes</td></tr></tbody>
+          </table>
+        </section>
+        <section class="result-panel">
+          <h1>인덱스</h1>
+          <div class="status">FAISS 인덱스 갱신 완료: 128개 이미지 반영</div>
+          <dl class="info-list">
+            <dt>상태</dt><dd>completed</dd>
+            <dt>갱신시각</dt><dd>2026-05-01 12:00:00</dd>
+          </dl>
+          <form class="inline-form">
+            <button type="button">FAISS 인덱스 갱신</button>
+          </form>
+        </section>
+      </section>
+
+      <section class="result-panel preview-spacer">
+          <h1>최근 로그</h1>
+          <pre class="log-view">2026-05-01 12:00:00 INFO backup completed</pre>
+      </section>
+    </main>
+  </body>
+</html>

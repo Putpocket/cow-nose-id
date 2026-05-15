@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>계정 관리 · Cow Nose ID</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <strong class="brand">비문 식별 관리</strong>
+        <a href="{{ url_for('index') }}">식별</a>
+        <a href="{{ url_for('new_cow_page') }}">소 등록</a>
+        <a href="{{ url_for('cows_page') }}">소 목록</a>
+        <a href="{{ url_for('users_page') }}">계정 관리</a>
+        <a href="{{ url_for('system_page') }}">시스템</a>
+        <form action="{{ url_for('logout') }}" method="post">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <span>{{ current_user.username }}</span>
+          <button type="submit" class="secondary-button">로그아웃</button>
+        </form>
+      </header>
+
+      <section class="admin-layout">
+        <form class="form-panel" action="{{ url_for('create_user') }}" method="post">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <div>
+            <h1>계정 추가</h1>
+          </div>
+          {% if saved %}
+            <div class="status">계정이 추가되었습니다.</div>
+          {% endif %}
+          {% if error %}
+            <div class="status error">{{ error }}</div>
+          {% endif %}
+          <label>
+            <span>아이디</span>
+            <input name="username" type="text" autocomplete="off" required />
+          </label>
+          <label>
+            <span>비밀번호</span>
+            <input name="password" type="password" autocomplete="new-password" required />
+          </label>
+          <label>
+            <span>권한</span>
+            <select name="role">
+              <option value="user">일반</option>
+              <option value="admin">관리자</option>
+            </select>
+          </label>
+          <button type="submit">추가</button>
+        </form>
+
+        <section class="result-panel">
+          <h2>계정 목록</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>아이디</th>
+                <th>권한</th>
+                <th>상태</th>
+                <th>최근 로그인</th>
+                <th>생성일</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for user in users %}
+                <tr>
+                  <td>{{ user.username }}</td>
+                  <td>{{ "관리자" if user.role == "admin" else "일반" }}</td>
+                  <td>
+                    {{ "활성" if user.status == "active" else "비활성" }}
+                    {% if user.must_change_password %} / 변경필요{% endif %}
+                  </td>
+                  <td>{{ user.last_login_at or "-" }}</td>
+                  <td>{{ user.created_at }}</td>
+                  <td class="table-actions">
+                    <form action="{{ url_for('update_user_password', user_id=user.id) }}" method="post">
+                      <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+                      <input name="password" type="password" placeholder="새 비밀번호" required />
+                      <button type="submit" class="secondary-button">변경</button>
+                    </form>
+                    {% if user.status == "active" %}
+                      <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post">
+                        <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+                        <button type="submit" class="danger-button">비활성화</button>
+                      </form>
+                    {% else %}
+                      <form action="{{ url_for('enable_user', user_id=user.id) }}" method="post">
+                        <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+                        <button type="submit" class="secondary-button">활성화</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>소 목록 · Cow Nose ID</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <strong class="brand">비문 식별 관리</strong>
+        <a href="{{ url_for('index') }}">식별</a>
+        <a href="{{ url_for('new_cow_page') }}">소 등록</a>
+        <a href="{{ url_for('cows_page') }}">소 목록</a>
+        <a href="{{ url_for('users_page') }}">계정 관리</a>
+        <a href="{{ url_for('system_page') }}">시스템</a>
+        <form action="{{ url_for('logout') }}" method="post">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <span>{{ current_user.username }}</span>
+          <button type="submit" class="secondary-button">로그아웃</button>
+        </form>
+      </header>
+
+      <section class="result-panel">
+        <h1>소 목록</h1>
+        {% if error %}
+          <div class="status error">{{ error }}</div>
+        {% endif %}
+        <table>
+          <thead>
+            <tr>
+              <th>개체번호</th>
+              <th>이름</th>
+              <th>품종</th>
+              <th>소유주</th>
+              <th>농장</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cow in cows %}
+              <tr>
+                <td>{{ cow.ear_tag }}</td>
+                <td>{{ cow.name or "-" }}</td>
+                <td>{{ cow.breed or "-" }}</td>
+                <td>{{ cow.owner_name }}</td>
+                <td>{{ cow.farm_name or "-" }}</td>
+                <td class="table-actions">
+                  <a class="link-button" href="{{ url_for('edit_cow_page', cow_id=cow.id) }}">수정</a>
+                  <form action="{{ url_for('delete_cow', cow_id=cow.id) }}" method="post">
+                    <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+                    <button type="submit" class="danger-button">삭제</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

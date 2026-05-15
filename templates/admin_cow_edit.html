@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>소 정보 수정 · Cow Nose ID</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <strong class="brand">비문 식별 관리</strong>
+        <a href="{{ url_for('index') }}">식별</a>
+        <a href="{{ url_for('new_cow_page') }}">소 등록</a>
+        <a href="{{ url_for('cows_page') }}">소 목록</a>
+        <a href="{{ url_for('users_page') }}">계정 관리</a>
+        <a href="{{ url_for('system_page') }}">시스템</a>
+        <form action="{{ url_for('logout') }}" method="post">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <span>{{ current_user.username }}</span>
+          <button type="submit" class="secondary-button">로그아웃</button>
+        </form>
+      </header>
+
+      <form class="form-panel" action="{{ url_for('update_cow', cow_id=cow.id) }}" method="post" enctype="multipart/form-data">
+        <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+        <div>
+          <h1>소 정보 수정</h1>
+        </div>
+        {% if saved %}
+          <div class="status">수정되었습니다. 이미지 변경 시 FAISS 인덱스 갱신 후 식별에 반영됩니다.</div>
+        {% endif %}
+        {% if error %}
+          <div class="status error">{{ error }}</div>
+        {% endif %}
+
+        <section class="form-section">
+          <h2>소유주</h2>
+          <div class="form-grid">
+            <label>
+              <span>소유주명</span>
+              <input name="owner_name" type="text" value="{{ cow.owner_name }}" required />
+            </label>
+            <label>
+              <span>연락처</span>
+              <input name="owner_phone" type="text" value="{{ cow.owner_phone or '' }}" />
+            </label>
+            <label>
+              <span>농장명</span>
+              <input name="farm_name" type="text" value="{{ cow.farm_name or '' }}" />
+            </label>
+            <label>
+              <span>주소</span>
+              <input name="farm_address" type="text" value="{{ cow.farm_address or '' }}" />
+            </label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <h2>개체 정보</h2>
+          <div class="form-grid">
+            <label>
+              <span>개체번호</span>
+              <input name="ear_tag" type="text" value="{{ cow.ear_tag }}" required />
+            </label>
+            <label>
+              <span>이름</span>
+              <input name="cow_name" type="text" value="{{ cow.cow_name or '' }}" />
+            </label>
+            <label>
+              <span>품종</span>
+              <input name="breed" type="text" value="{{ cow.breed or '' }}" />
+            </label>
+            <label>
+              <span>성별</span>
+              <input name="sex" type="text" value="{{ cow.sex or '' }}" />
+            </label>
+            <label>
+              <span>생년월일</span>
+              <input name="birth_date" type="date" value="{{ cow.birth_date or '' }}" />
+            </label>
+            <label>
+              <span>비고</span>
+              <input name="notes" type="text" value="{{ cow.notes or '' }}" />
+            </label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <h2>비문 이미지</h2>
+          <label>
+            <span>새 소 코 사진 3~10장</span>
+            <input name="files" type="file" accept="image/*" multiple />
+          </label>
+        </section>
+
+        <button type="submit">저장</button>
+      </form>
+    </main>
+  </body>
+</html>

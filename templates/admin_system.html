@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>시스템 · Cow Nose ID</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <strong class="brand">비문 식별 관리</strong>
+        <a href="{{ url_for('index') }}">식별</a>
+        <a href="{{ url_for('new_cow_page') }}">소 등록</a>
+        <a href="{{ url_for('cows_page') }}">소 목록</a>
+        <a href="{{ url_for('users_page') }}">계정 관리</a>
+        <a href="{{ url_for('system_page') }}">시스템</a>
+        <form action="{{ url_for('logout') }}" method="post">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <span>{{ current_user.username }}</span>
+          <button type="submit" class="secondary-button">로그아웃</button>
+        </form>
+      </header>
+
+      <section class="admin-layout">
+        <section class="result-panel">
+          <h1>백업</h1>
+          {% if saved %}
+            <div class="status">백업이 생성되었습니다.</div>
+          {% endif %}
+          {% if error %}
+            <div class="status error">{{ error }}</div>
+          {% endif %}
+          <form class="inline-form" action="{{ url_for('run_backup_now') }}" method="post">
+            <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+            <button type="submit">지금 백업</button>
+          </form>
+          <table>
+            <thead>
+              <tr>
+                <th>파일</th>
+                <th>크기</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for backup in backups %}
+                <tr>
+                  <td>{{ backup.name }}</td>
+                  <td>{{ backup.size }} bytes</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="result-panel">
+          <h1>인덱스</h1>
+          <div class="status">{{ index_status.message }}</div>
+          <dl class="info-list">
+            <dt>상태</dt><dd>{{ index_status.state }}</dd>
+            <dt>갱신시각</dt><dd>{{ index_status.updated_at or "-" }}</dd>
+          </dl>
+          <form class="inline-form" action="{{ url_for('rebuild_index_now') }}" method="post">
+            <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+            <button type="submit">FAISS 인덱스 갱신</button>
+          </form>
+        </section>
+      </section>
+
+      <section class="result-panel preview-spacer">
+        <section>
+          <h1>최근 로그</h1>
+          <pre class="log-view">{{ logs or "로그가 없습니다." }}</pre>
+        </section>
+      </section>
+
+      <section class="result-panel preview-spacer">
+        <h1>감사 로그</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>시각</th>
+              <th>계정</th>
+              <th>행위</th>
+              <th>대상</th>
+              <th>IP</th>
+              <th>상세</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in audit_logs %}
+              <tr>
+                <td>{{ log.created_at }}</td>
+                <td>{{ log.actor_username or "-" }}</td>
+                <td>{{ log.action }}</td>
+                <td>{{ log.target_type or "-" }} {{ log.target_id or "" }}</td>
+                <td>{{ log.ip_address or "-" }}</td>
+                <td>{{ log.detail or "-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

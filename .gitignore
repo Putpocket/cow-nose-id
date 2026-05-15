@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/*.faiss
+data/*.npy
+data/*.json
+data/uploads/
+data/backups/
+data/logs/
+models/
+uploads/

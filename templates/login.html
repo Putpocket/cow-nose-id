@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>로그인 · Cow Nose ID</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+  </head>
+  <body>
+    <main class="auth-shell">
+      <form class="form-panel auth-panel" action="{{ url_for('login') }}" method="post">
+        <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+        <div>
+          <h1>비문 식별 관리</h1>
+        </div>
+        {% if error %}
+          <div class="status error">{{ error }}</div>
+        {% endif %}
+        <label>
+          <span>아이디</span>
+          <input name="username" type="text" autocomplete="username" required />
+        </label>
+        <label>
+          <span>비밀번호</span>
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">로그인</button>
+      </form>
+    </main>
+  </body>
+</html>

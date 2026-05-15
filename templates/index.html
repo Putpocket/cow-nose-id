@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cow Nose ID</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <strong class="brand">비문 식별 관리</strong>
+        <a href="{{ url_for('index') }}">식별</a>
+        {% if current_user and current_user.role == "admin" %}
+          <a href="{{ url_for('new_cow_page') }}">소 등록</a>
+          <a href="{{ url_for('cows_page') }}">소 목록</a>
+          <a href="{{ url_for('users_page') }}">계정 관리</a>
+          <a href="{{ url_for('system_page') }}">시스템</a>
+        {% endif %}
+        <form action="{{ url_for('logout') }}" method="post">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <span>{{ current_user.username }}</span>
+          <button type="submit" class="secondary-button">로그아웃</button>
+        </form>
+      </header>
+      <section class="workspace">
+        <form class="upload-panel" action="{{ url_for('identify_page') }}" method="post" enctype="multipart/form-data">
+          <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
+          <div>
+            <h1>비문 식별</h1>
+          </div>
+          <label class="dropzone" for="fileInput">
+            <input id="fileInput" name="file" type="file" accept="image/*" required />
+            <strong>이미지 선택</strong>
+            <small>소 코 사진 파일을 업로드하세요.</small>
+          </label>
+          <button id="identifyButton" type="submit">식별 시작</button>
+        </form>
+
+        <div class="preview-panel">
+          <img id="preview" alt="" />
+          <div id="placeholder">이미지를 선택하면 미리보기가 표시됩니다.</div>
+        </div>
+      </section>
+
+      <section class="result-grid" aria-live="polite">
+        <div class="result-panel">
+          <h2>최상위 매칭</h2>
+          {% if error %}
+            <div class="status error">{{ error }}</div>
+          {% elif result %}
+            <div class="status">{{ "매칭 성공" if result.matched else "임계값 미달" }}</div>
+            <dl class="info-list">
+              {% if result.cow %}
+                <dt>개체번호</dt><dd>{{ result.cow.ear_tag }}</dd>
+                <dt>이름</dt><dd>{{ result.cow.name or "-" }}</dd>
+                <dt>품종</dt><dd>{{ result.cow.breed or "-" }}</dd>
+                <dt>성별</dt><dd>{{ result.cow.sex or "-" }}</dd>
+                <dt>생년월일</dt><dd>{{ result.cow.birth_date or "-" }}</dd>
+                <dt>소유주</dt><dd>{{ result.cow.owner.name }}</dd>
+                <dt>연락처</dt><dd>{{ result.cow.owner.phone or "-" }}</dd>
+                <dt>농장</dt><dd>{{ result.cow.owner.farm_name or "-" }}</dd>
+                <dt>주소</dt><dd>{{ result.cow.owner.farm_address or "-" }}</dd>
+              {% else %}
+                <dt>결과</dt><dd>신뢰 가능한 개체를 찾지 못했습니다.</dd>
+              {% endif %}
+            </dl>
+          {% else %}
+            <div class="status">대기 중</div>
+          {% endif %}
+        </div>
+        <div class="result-panel">
+          <h2>유사도</h2>
+          {% if result %}
+            <div class="score">{{ "%.1f"|format(result.best_similarity * 100) }}%</div>
+            <ol class="matches">
+              {% for match in result.matches %}
+                <li>cow_id {{ match.cow_id }} · {{ "%.1f"|format(match.similarity * 100) }}%</li>
+              {% endfor %}
+            </ol>
+          {% else %}
+            <div class="score">--</div>
+          {% endif %}
+        </div>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='preview.js') }}"></script>
+  </body>
+</html>
