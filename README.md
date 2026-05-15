@@ -11,16 +11,17 @@
 - CUDA 사용 가능한 PyTorch 설치 완료
 - Python 3.11 또는 3.12 권장
 - PostgreSQL
-- 학습 완료된 YOLOv8m `.pt` 파일 보유
+- 학습 완료된 YOLO `.pt` 파일 보유
 
 ## 설치
 
 이미 PyTorch가 설치되어 있다는 전제라 `requirements.txt`에는 `torch`를 넣지 않았습니다.
+CUDA를 써야 하면 새 venv를 만들기보다 학습에 사용했던 PyTorch 환경에서 실행하는 것을
+권장합니다.
 
 ```bash
 cd /path/to/cow-nose-id
-python3 -m venv .venv
-source .venv/bin/activate
+# 예: conda activate 학습에쓴환경
 pip install -U pip
 pip install -r requirements.txt
 cp .env.example .env
@@ -109,17 +110,22 @@ psql "$DATABASE_URL" -f sql/schema.sql
 수동 갱신도 실행할 수 있습니다.
 
 모든 POST 폼은 CSRF 토큰을 검사합니다. 업로드 파일은 `MAX_UPLOAD_MB`,
-`ALLOWED_IMAGE_EXTENSIONS`, MIME 타입, Pillow 이미지 검증을 통과해야 합니다.
+`MAX_IMAGE_PIXELS`, `ALLOWED_IMAGE_EXTENSIONS`, MIME 타입, 파일 시그니처,
+Pillow 이미지 검증, 확장자와 실제 이미지 형식 일치 검사를 통과해야 합니다.
+저장 파일명은 원본 파일명을 쓰지 않고 서버가 생성한 `cow-upload-...` 형식을
+사용하며, 저장 전 이미지를 재인코딩합니다.
 HTTPS로 운영할 때는 `SESSION_COOKIE_SECURE=true`로 바꾸세요. `SESSION_COOKIE_HTTPONLY`,
 `SESSION_COOKIE_SAMESITE`는 세션 쿠키 보호에 사용됩니다.
 앱은 기본 보안 헤더(`Content-Security-Policy`, `X-Frame-Options`,
 `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`)를 응답에 추가합니다.
 업로드 디렉터리는 `0750`, 업로드 파일은 `UPLOAD_FILE_MODE` 권한으로 저장됩니다.
 감사 로그에 저장되는 IP, User-Agent, 상세 메시지는 제어문자를 제거하고 길이를 제한합니다.
+로그인, 업로드, 관리자 위험 작업에는 `Flask-Limiter` 기반 rate limit이 적용됩니다.
 
 ## 기존 사진 벡터화
 
-`cow_images`에 등록된 사진을 YOLO `.pt`로 crop하고 DINOv3 embedding으로 변환합니다.
+`cow_images`에 등록된 사진을 YOLO `.pt`로 crop하고 DINO embedding으로 변환합니다.
+기본 embedding 모델은 `facebook/dinov2-base`입니다.
 자동 갱신을 끈 환경에서는 관리자 화면에서 새 소를 등록한 뒤 아래 두 명령으로
 FAISS index를 다시 만들어야 식별 검색에 반영됩니다.
 
@@ -155,7 +161,7 @@ cp /path/to/best.pt models/cow-nose-yolo.pt
 YOLO_WEIGHTS_PATH=./models/cow-nose-yolo.pt
 ```
 
-실행 전에 환경을 점검합니다. 이 단계에서 DB 연결, `.pt` 로드, DINOv3 로드가 한 번에
+실행 전에 환경을 점검합니다. 이 단계에서 DB 연결, `.pt` 로드, DINO 모델 로드가 한 번에
 확인됩니다.
 
 ```bash
