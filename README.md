@@ -42,8 +42,15 @@ DEVICE=cuda:0
 SIMILARITY_THRESHOLD=0.72
 SECRET_KEY=change-this-to-a-random-secret
 UPLOAD_DIR=./data/uploads
+MAX_REQUEST_MB=50
 MAX_UPLOAD_MB=8
 MAX_IMAGE_PIXELS=20000000
+PROXY_FIX_ENABLED=false
+PROXY_FIX_X_FOR=1
+PROXY_FIX_X_PROTO=1
+PROXY_FIX_X_HOST=1
+PROXY_FIX_X_PORT=1
+PROXY_FIX_X_PREFIX=0
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_STORAGE_URI=memory://
 LOGIN_RATE_LIMIT=5 per minute
@@ -109,8 +116,9 @@ psql "$DATABASE_URL" -f sql/schema.sql
 백그라운드에서 자동 갱신합니다. `/admin/system`에서 갱신 상태를 확인하고
 수동 갱신도 실행할 수 있습니다.
 
-모든 POST 폼은 CSRF 토큰을 검사합니다. 업로드 파일은 `MAX_UPLOAD_MB`,
-`MAX_IMAGE_PIXELS`, `ALLOWED_IMAGE_EXTENSIONS`, MIME 타입, 파일 시그니처,
+모든 POST 폼은 CSRF 토큰을 검사합니다. 업로드 요청 전체는 `MAX_REQUEST_MB`,
+개별 파일은 `MAX_UPLOAD_MB`로 제한합니다. 업로드 파일은 `MAX_IMAGE_PIXELS`,
+`ALLOWED_IMAGE_EXTENSIONS`, MIME 타입, 파일 시그니처,
 Pillow 이미지 검증, 확장자와 실제 이미지 형식 일치 검사를 통과해야 합니다.
 저장 파일명은 원본 파일명을 쓰지 않고 서버가 생성한 `cow-upload-...` 형식을
 사용하며, 저장 전 이미지를 재인코딩합니다.
@@ -121,6 +129,9 @@ HTTPS로 운영할 때는 `SESSION_COOKIE_SECURE=true`로 바꾸세요. `SESSION
 업로드 디렉터리는 `0750`, 업로드 파일은 `UPLOAD_FILE_MODE` 권한으로 저장됩니다.
 감사 로그에 저장되는 IP, User-Agent, 상세 메시지는 제어문자를 제거하고 길이를 제한합니다.
 로그인, 업로드, 관리자 위험 작업에는 `Flask-Limiter` 기반 rate limit이 적용됩니다.
+리버스 프록시 뒤에서 운영할 때는 신뢰할 수 있는 프록시만 `X-Forwarded-*` 헤더를
+전달하도록 구성하고 `PROXY_FIX_ENABLED=true`를 설정해야 클라이언트 IP 기반
+rate limit과 감사 로그가 올바르게 동작합니다.
 
 ## 기존 사진 벡터화
 
@@ -267,6 +278,8 @@ POST /api/admin/index/rebuild
 - 앱 로그는 `LOG_FILE`에 저장되며, `WARNING` 이상은 `ERROR_LOG_FILE`에도 함께 저장됩니다. `LOG_LEVEL=INFO`를 기본으로 사용하고, 장애 분석 때만 임시로 `DEBUG`로 올리는 것을 권장합니다.
 - 운영에서는 업로드/백업 경로를 앱 루트 밖 절대 경로로 두는 것을 권장합니다. 예: `UPLOAD_DIR=/var/lib/cow-muzzle/uploads`, `BACKUP_DIR=/var/backups/cow-muzzle`.
 - `RATE_LIMIT_STORAGE_URI=memory://`는 단일 프로세스 테스트용입니다. 운영에서 여러 프로세스나 서버를 쓰면 Redis 같은 공유 저장소를 지정하세요.
+- 소 등록처럼 여러 이미지를 한 번에 올리는 요청은 `MAX_REQUEST_MB`가 적용되고, 각 이미지 1장에는 `MAX_UPLOAD_MB`가 적용됩니다.
+- 수동 백업과 FAISS 인덱스 갱신은 백그라운드 작업으로 실행되며, `/admin/system`에서 상태를 확인할 수 있습니다.
 
 ## 보안 점검
 

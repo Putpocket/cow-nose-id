@@ -72,7 +72,7 @@
                   <td>{{ "관리자" if user.role == "admin" else "일반" }}</td>
                   <td>
                     {{ "활성" if user.status == "active" else "비활성" }}
-                    {% if user.must_change_password %} / 변경필요{% endif %}
+                    {% if user.must_change_password %} / 변경 필요{% endif %}
                   </td>
                   <td>{{ user.last_login_at or "-" }}</td>
                   <td>{{ user.created_at }}</td>

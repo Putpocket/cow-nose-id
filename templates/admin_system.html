@@ -26,7 +26,7 @@
         <section class="result-panel">
           <h1>백업</h1>
           {% if saved %}
-            <div class="status">백업이 생성되었습니다.</div>
+            <div class="status">백업을 시작했습니다.</div>
           {% endif %}
           {% if error %}
             <div class="status error">{{ error }}</div>
@@ -35,6 +35,10 @@
             <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
             <button type="submit">지금 백업</button>
           </form>
+          <dl class="info-list">
+            <dt>상태</dt><dd>{{ backup_status.message }}</dd>
+            <dt>갱신 시각</dt><dd>{{ backup_status.updated_at or "-" }}</dd>
+          </dl>
           <table>
             <thead>
               <tr>
@@ -58,7 +62,7 @@
           <div class="status">{{ index_status.message }}</div>
           <dl class="info-list">
             <dt>상태</dt><dd>{{ index_status.state }}</dd>
-            <dt>갱신시각</dt><dd>{{ index_status.updated_at or "-" }}</dd>
+            <dt>갱신 시각</dt><dd>{{ index_status.updated_at or "-" }}</dd>
           </dl>
           <form class="inline-form" action="{{ url_for('rebuild_index_now') }}" method="post">
             <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />

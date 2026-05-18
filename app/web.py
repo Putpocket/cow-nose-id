@@ -18,6 +18,7 @@ from flask_limiter.util import get_remote_address
 from PIL import Image, UnidentifiedImageError
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.backup import run_backup, start_backup_scheduler
 from app.config import get_settings
@@ -32,6 +33,12 @@ database = Database(settings)
 limiter = Limiter(key_func=get_remote_address, storage_uri=settings.rate_limit_storage_uri)
 pipeline: IdentificationPipeline | None = None
 pipeline_lock = threading.Lock()
+backup_lock = threading.Lock()
+backup_status = {
+    "state": "idle",
+    "message": "대기 중",
+    "updated_at": None,
+}
 index_rebuild_lock = threading.Lock()
 index_rebuild_status = {
     "state": "idle",
@@ -44,9 +51,18 @@ atexit.register(database.close)
 
 def create_app() -> Flask:
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
+    if settings.proxy_fix_enabled:
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app,
+            x_for=settings.proxy_fix_x_for,
+            x_proto=settings.proxy_fix_x_proto,
+            x_host=settings.proxy_fix_x_host,
+            x_port=settings.proxy_fix_x_port,
+            x_prefix=settings.proxy_fix_x_prefix,
+        )
     app.secret_key = settings.secret_key
     app.permanent_session_lifetime = timedelta(minutes=settings.session_lifetime_minutes)
-    app.config["MAX_CONTENT_LENGTH"] = settings.max_upload_mb * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = settings.max_request_mb * 1024 * 1024
     app.config["SESSION_COOKIE_SECURE"] = settings.session_cookie_secure
     app.config["SESSION_COOKIE_HTTPONLY"] = settings.session_cookie_httponly
     app.config["SESSION_COOKIE_SAMESITE"] = settings.session_cookie_samesite
@@ -445,19 +461,17 @@ def create_app() -> Flask:
             "logs": read_log_tail(),
             "audit_logs": database.list_audit_logs(),
             "backups": list_backup_files(),
+            "backup_status": backup_status,
             "index_status": index_rebuild_status,
         })
 
     @app.post("/api/admin/backups/run")
     @api_admin_required
+    @limiter.limit(lambda: settings.admin_action_rate_limit)
     def api_run_backup_now():
-        try:
-            backup_path = run_backup(settings)
-            audit("backup_created")
-            return jsonify({"success": True, "backup": {"name": backup_path.name, "path": str(backup_path)}})
-        except Exception:
-            app.logger.exception("Manual database backup API failed.")
-            return json_error("백업 실행 중 오류가 발생했습니다.", 500)
+        started = trigger_manual_backup("API 수동 실행")
+        audit("backup_requested", detail="started" if started else "already running")
+        return jsonify({"success": True, "started": started, "backup_status": backup_status}), 202
 
     @app.post("/api/admin/index/rebuild")
     @api_admin_required
@@ -740,6 +754,7 @@ def create_app() -> Flask:
             logs=read_log_tail(),
             audit_logs=database.list_audit_logs(),
             backups=list_backup_files(),
+            backup_status=backup_status,
             index_status=index_rebuild_status,
             error=None,
             saved=False,
@@ -750,31 +765,19 @@ def create_app() -> Flask:
     @admin_required
     @limiter.limit(lambda: settings.admin_action_rate_limit)
     def run_backup_now():
-        try:
-            run_backup(settings)
-            audit("backup_created")
-            return render_template(
-                "admin_system.html",
-                logs=read_log_tail(),
-                audit_logs=database.list_audit_logs(),
-                backups=list_backup_files(),
-                index_status=index_rebuild_status,
-                error=None,
-                saved=True,
-                current_user=current_user(),
-            )
-        except Exception:
-            app.logger.exception("Manual database backup failed.")
-            return render_template(
-                "admin_system.html",
-                logs=read_log_tail(),
-                audit_logs=database.list_audit_logs(),
-                backups=list_backup_files(),
-                index_status=index_rebuild_status,
-                error="백업 실행 중 오류가 발생했습니다.",
-                saved=False,
-                current_user=current_user(),
-            ), 500
+        started = trigger_manual_backup("수동 실행")
+        audit("backup_requested", detail="started" if started else "already running")
+        return render_template(
+            "admin_system.html",
+            logs=read_log_tail(),
+            audit_logs=database.list_audit_logs(),
+            backups=list_backup_files(),
+            backup_status=backup_status,
+            index_status=index_rebuild_status,
+            error=None if started else "이미 백업이 실행 중입니다.",
+            saved=started,
+            current_user=current_user(),
+        ), 202 if started else 409
 
     @app.post("/admin/index/rebuild")
     @admin_required
@@ -787,6 +790,7 @@ def create_app() -> Flask:
             logs=read_log_tail(),
             audit_logs=database.list_audit_logs(),
             backups=list_backup_files(),
+            backup_status=backup_status,
             index_status=index_rebuild_status,
             error=None,
             saved=False,
@@ -909,14 +913,43 @@ def reset_pipeline() -> None:
 
 
 def upload_too_large_message() -> str:
-    return f"업로드 파일 총 용량이 너무 큽니다. 한 번에 최대 {settings.max_upload_mb}MB까지 업로드할 수 있습니다."
+    return f"업로드 파일 총 용량이 너무 큽니다. 한 번에 최대 {settings.max_request_mb}MB까지 업로드할 수 있습니다."
+
+
+def trigger_manual_backup(reason: str) -> bool:
+    if not backup_lock.acquire(blocking=False):
+        update_backup_status("running", "백업 실행 중")
+        return False
+    thread = threading.Thread(target=run_manual_backup, args=(reason,), daemon=True)
+    thread.start()
+    return True
+
+
+def run_manual_backup(reason: str) -> None:
+    try:
+        update_backup_status("running", f"{reason}: 백업 실행 중")
+        app.logger.info("Manual database backup started: reason=%s", safe_log_value(reason, 120))
+        backup_path = run_backup(settings)
+        update_backup_status("completed", f"백업 완료: {backup_path.name}")
+        app.logger.info("Manual database backup completed: path=%s", backup_path)
+    except Exception:
+        app.logger.exception("Manual database backup failed.")
+        update_backup_status("failed", "백업 실행 중 오류가 발생했습니다. 로그를 확인하세요.")
+    finally:
+        backup_lock.release()
+
+
+def update_backup_status(state: str, message: str) -> None:
+    backup_status["state"] = state
+    backup_status["message"] = message
+    backup_status["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def trigger_index_rebuild(reason: str) -> None:
     if not settings.auto_rebuild_index:
         update_index_status("disabled", "자동 갱신이 비활성화되어 있습니다.")
         return
-    if index_rebuild_lock.locked():
+    if not index_rebuild_lock.acquire(blocking=False):
         index_rebuild_status["pending"] = True
         update_index_status("queued", f"{reason}: 기존 갱신 작업 이후 한 번 더 갱신합니다.")
         return
@@ -925,9 +958,9 @@ def trigger_index_rebuild(reason: str) -> None:
 
 
 def run_index_rebuild(reason: str) -> None:
-    next_reason = reason
-    while next_reason:
-        with index_rebuild_lock:
+    try:
+        next_reason = reason
+        while next_reason:
             index_rebuild_status["pending"] = False
             update_index_status("running", f"{next_reason}: FAISS 인덱스 갱신 중")
             app.logger.info("FAISS index rebuild started: reason=%s", safe_log_value(next_reason, 120))
@@ -940,6 +973,8 @@ def run_index_rebuild(reason: str) -> None:
                 app.logger.exception("FAISS index rebuild failed.")
                 update_index_status("failed", "FAISS 인덱스 갱신 실패. 로그를 확인하세요.")
             next_reason = "대기 중인 변경사항" if index_rebuild_status["pending"] else None
+    finally:
+        index_rebuild_lock.release()
 
 
 def update_index_status(state: str, message: str) -> None:
@@ -977,7 +1012,7 @@ def audit(
         action=action,
         target_type=target_type,
         target_id=target_id,
-        ip_address=safe_log_value(request.headers.get("X-Forwarded-For", request.remote_addr), 128),
+        ip_address=safe_log_value(request.remote_addr, 128),
         user_agent=safe_log_value(request.headers.get("User-Agent"), 256),
         detail=safe_log_value(detail, 500),
     )
@@ -1001,7 +1036,7 @@ def validate_csrf() -> None:
 
 def validate_password_policy(password: str) -> None:
     if len(password) < settings.password_min_length:
-        raise ValueError(f"비밀번호는 최소 {settings.password_min_length}자 이상이어야 합니다.")
+        raise ValueError(f"비밀번호는 {settings.password_min_length}자 이상이어야 합니다.")
     if not any(character.isalpha() for character in password):
         raise ValueError("비밀번호에는 영문자가 포함되어야 합니다.")
     if not any(character.isdigit() for character in password):
@@ -1111,7 +1146,7 @@ def get_registration_uploads(required: bool) -> list[FileStorage]:
     if not uploads:
         return []
     if len(uploads) < settings.registration_min_images:
-        raise ValueError(f"소 등록 이미지는 최소 {settings.registration_min_images}장 이상 필요합니다.")
+        raise ValueError(f"소 등록 이미지는 {settings.registration_min_images}장 이상 필요합니다.")
     if len(uploads) > settings.registration_max_images:
         raise ValueError(f"소 등록 이미지는 최대 {settings.registration_max_images}장까지 업로드할 수 있습니다.")
     return uploads
