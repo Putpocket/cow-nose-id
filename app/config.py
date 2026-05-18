@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     similarity_threshold: float = 0.72
     secret_key: str = "change-me"
     upload_dir: str = "./data/uploads"
-    max_request_mb: int = 50
+    max_request_mb: int = 100
     max_upload_mb: int = 8
     max_image_pixels: int = 20_000_000
     proxy_fix_enabled: bool = False

@@ -41,8 +41,8 @@ def main() -> int:
         errors.append("REGISTRATION_MIN_IMAGES는 1 이상이어야 합니다.")
     if settings.registration_max_images < settings.registration_min_images:
         errors.append("REGISTRATION_MAX_IMAGES는 REGISTRATION_MIN_IMAGES 이상이어야 합니다.")
-    if settings.max_request_mb < settings.max_upload_mb * settings.registration_min_images:
-        warnings.append("MAX_REQUEST_MB가 등록 최소 이미지 수와 개별 파일 제한을 감당하기에 작습니다.")
+    if settings.max_request_mb < settings.max_upload_mb * settings.registration_max_images:
+        warnings.append("MAX_REQUEST_MB가 등록 최대 이미지 수와 개별 파일 제한을 감당하기에 작습니다.")
     if settings.proxy_fix_enabled:
         warnings.append("PROXY_FIX_ENABLED=true일 때는 신뢰할 수 있는 프록시만 X-Forwarded-* 헤더를 전달하도록 제한해야 합니다.")
     if not Path(settings.upload_dir).is_absolute():
