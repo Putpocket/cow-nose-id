@@ -426,9 +426,17 @@ class Database:
         sex: str | None,
         birth_date: str | None,
         notes: str | None,
-    ) -> None:
+        image_paths: list[str] | None = None,
+    ) -> list[str]:
+        old_image_paths = []
         try:
             with self.connection() as conn:
+                if image_paths is not None:
+                    old_rows = conn.execute(
+                        "SELECT image_path FROM cow_images WHERE cow_id = %s",
+                        (cow_id,),
+                    ).fetchall()
+                    old_image_paths = [row["image_path"] for row in old_rows]
                 row = conn.execute(
                     "SELECT owner_id FROM cows WHERE id = %s",
                     (cow_id,),
@@ -456,8 +464,19 @@ class Database:
                     """,
                     (ear_tag, cow_name, breed, sex, birth_date, notes, cow_id),
                 )
+                if image_paths is not None:
+                    conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
+                    with conn.cursor() as cur:
+                        cur.executemany(
+                            """
+                            INSERT INTO cow_images (cow_id, image_path)
+                            VALUES (%s, %s)
+                            """,
+                            [(cow_id, image_path) for image_path in image_paths],
+                        )
         except errors.UniqueViolation as exc:
             raise ValueError("이미 등록된 개체번호입니다.") from exc
+        return old_image_paths
 
     def replace_cow_images(self, cow_id: int, image_paths: list[str]) -> list[str]:
         with self.connection() as conn:

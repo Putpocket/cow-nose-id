@@ -200,6 +200,14 @@ def create_app() -> Flask:
                 error=str(exc),
                 current_user=current_user(),
             ), 400
+        except FileNotFoundError:
+            app.logger.exception("Identify page is not ready because a required model or index file is missing.")
+            return render_template(
+                "index.html",
+                result=None,
+                error="식별에 필요한 모델 또는 FAISS 인덱스 파일이 없습니다. 관리자에게 문의하세요.",
+                current_user=current_user(),
+            ), 503
         except Exception:
             app.logger.exception("Identify page request failed.")
             return render_template(
@@ -280,6 +288,9 @@ def create_app() -> Flask:
             return jsonify(result.model_dump())
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+        except FileNotFoundError:
+            app.logger.exception("Identify API is not ready because a required model or index file is missing.")
+            return jsonify({"error": "식별에 필요한 모델 또는 FAISS 인덱스 파일이 없습니다."}), 503
         except Exception:
             app.logger.exception("Identify API request failed.")
             return jsonify({"error": "식별 처리 중 서버 오류가 발생했습니다."}), 500
@@ -384,6 +395,7 @@ def create_app() -> Flask:
                 notes=json_or_form_value("notes", default=None),
                 image_paths=image_paths,
             )
+            image_paths = []
             audit("cow_created", target_type="cow", target_id=str(cow_id))
             trigger_index_rebuild("소 등록")
             return jsonify({"id": cow_id, "success": True, "index_status": index_rebuild_status}), 201
@@ -404,7 +416,10 @@ def create_app() -> Flask:
             existing = database.get_cow_record(cow_id)
             if existing is None:
                 raise ValueError("소 정보를 찾을 수 없습니다.")
-            database.update_cow_with_owner(
+            uploads = get_registration_uploads(required=False)
+            if uploads:
+                image_paths = save_uploaded_images(uploads)
+            old_image_paths = database.update_cow_with_owner(
                 cow_id=cow_id,
                 owner_name=json_or_form_value("owner_name", default=existing["owner_name"]),
                 owner_phone=json_or_form_value("owner_phone", default=existing["owner_phone"]),
@@ -416,11 +431,9 @@ def create_app() -> Flask:
                 sex=json_or_form_value("sex", default=existing["sex"]),
                 birth_date=json_or_form_value("birth_date", default=existing["birth_date"]),
                 notes=json_or_form_value("notes", default=existing["notes"]),
+                image_paths=image_paths if uploads else None,
             )
-            uploads = get_registration_uploads(required=False)
             if uploads:
-                image_paths = save_uploaded_images(uploads)
-                old_image_paths = database.replace_cow_images(cow_id, image_paths)
                 image_paths = []
                 remove_uploaded_files(old_image_paths)
             audit("cow_updated", target_type="cow", target_id=str(cow_id))
@@ -501,6 +514,7 @@ def create_app() -> Flask:
                 notes=optional_form_value("notes"),
                 image_paths=image_paths,
             )
+            image_paths = []
             audit("cow_created", target_type="cow", target_id=str(cow_id))
             trigger_index_rebuild("소 등록")
             return render_template("admin_cow_form.html", error=None, saved=True, current_user=current_user())
@@ -677,7 +691,10 @@ def create_app() -> Flask:
     def update_cow(cow_id: int):
         image_paths = []
         try:
-            database.update_cow_with_owner(
+            uploads = get_registration_uploads(required=False)
+            if uploads:
+                image_paths = save_uploaded_images(uploads)
+            old_image_paths = database.update_cow_with_owner(
                 cow_id=cow_id,
                 owner_name=required_form_value("owner_name"),
                 owner_phone=optional_form_value("owner_phone"),
@@ -689,11 +706,9 @@ def create_app() -> Flask:
                 sex=optional_form_value("sex"),
                 birth_date=optional_form_value("birth_date"),
                 notes=optional_form_value("notes"),
+                image_paths=image_paths if uploads else None,
             )
-            uploads = get_registration_uploads(required=False)
             if uploads:
-                image_paths = save_uploaded_images(uploads)
-                old_image_paths = database.replace_cow_images(cow_id, image_paths)
                 image_paths = []
                 remove_uploaded_files(old_image_paths)
             audit("cow_updated", target_type="cow", target_id=str(cow_id))
@@ -925,7 +940,13 @@ def trigger_manual_backup(reason: str) -> bool:
         update_backup_status("running", "백업 실행 중")
         return False
     thread = threading.Thread(target=run_manual_backup, args=(reason,), daemon=True)
-    thread.start()
+    try:
+        thread.start()
+    except Exception:
+        backup_lock.release()
+        update_backup_status("failed", "백업 작업을 시작하지 못했습니다. 로그를 확인하세요.")
+        app.logger.exception("Failed to start manual backup thread.")
+        return False
     return True
 
 
@@ -958,7 +979,12 @@ def trigger_index_rebuild(reason: str) -> None:
         update_index_status("queued", f"{reason}: 기존 갱신 작업 이후 한 번 더 갱신합니다.")
         return
     thread = threading.Thread(target=run_index_rebuild, args=(reason,), daemon=True)
-    thread.start()
+    try:
+        thread.start()
+    except Exception:
+        index_rebuild_lock.release()
+        update_index_status("failed", "FAISS 인덱스 갱신 작업을 시작하지 못했습니다. 로그를 확인하세요.")
+        app.logger.exception("Failed to start FAISS index rebuild thread.")
 
 
 def run_index_rebuild(reason: str) -> None:
@@ -1001,25 +1027,28 @@ def audit(
     target_id: str | None = None,
     detail: str | None = None,
 ) -> None:
-    current = actor or current_user()
-    app.logger.info(
-        "audit action=%s actor=%s target_type=%s target_id=%s detail=%s",
-        safe_log_value(action, 80),
-        safe_log_value(current["username"] if current else None, 80),
-        safe_log_value(target_type, 80),
-        safe_log_value(target_id, 120),
-        safe_log_value(detail, 200),
-    )
-    database.add_audit_log(
-        actor_user_id=current["id"] if current else None,
-        actor_username=current["username"] if current else None,
-        action=action,
-        target_type=target_type,
-        target_id=target_id,
-        ip_address=safe_log_value(request.remote_addr, 128),
-        user_agent=safe_log_value(request.headers.get("User-Agent"), 256),
-        detail=safe_log_value(detail, 500),
-    )
+    try:
+        current = actor or current_user()
+        app.logger.info(
+            "audit action=%s actor=%s target_type=%s target_id=%s detail=%s",
+            safe_log_value(action, 80),
+            safe_log_value(current["username"] if current else None, 80),
+            safe_log_value(target_type, 80),
+            safe_log_value(target_id, 120),
+            safe_log_value(detail, 200),
+        )
+        database.add_audit_log(
+            actor_user_id=current["id"] if current else None,
+            actor_username=current["username"] if current else None,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            ip_address=safe_log_value(request.remote_addr, 128),
+            user_agent=safe_log_value(request.headers.get("User-Agent"), 256),
+            detail=safe_log_value(detail, 500),
+        )
+    except Exception:
+        app.logger.exception("Audit log write failed: action=%s", safe_log_value(action, 80))
 
 
 def csrf_token() -> str:
@@ -1137,8 +1166,15 @@ def save_uploaded_image(uploaded: FileStorage | None) -> str:
     target = (upload_dir / f"cow-upload-{datetime.now():%Y%m%d%H%M%S}-{uuid4().hex}.{extension}").resolve()
     if upload_dir not in target.parents:
         raise ValueError("업로드 저장 경로가 올바르지 않습니다.")
-    target.write_bytes(image_bytes)
-    os.chmod(target, int(settings.upload_file_mode, 8))
+    temp_target = target.with_name(f".{target.name}.tmp")
+    try:
+        temp_target.write_bytes(image_bytes)
+        os.chmod(temp_target, int(settings.upload_file_mode, 8))
+        temp_target.replace(target)
+    except Exception:
+        temp_target.unlink(missing_ok=True)
+        target.unlink(missing_ok=True)
+        raise
     return str(target)
 
 
