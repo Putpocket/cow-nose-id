@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import gc
 import logging
 import os
 import secrets
@@ -919,7 +920,14 @@ def get_pipeline() -> IdentificationPipeline:
 def reset_pipeline() -> None:
     global pipeline
     with pipeline_lock:
+        old_pipeline = pipeline
         pipeline = None
+    if old_pipeline is not None:
+        try:
+            old_pipeline.close()
+        except Exception:
+            app.logger.exception("Failed to close identification pipeline.")
+        gc.collect()
 
 
 def initialize_database(app: Flask) -> None:

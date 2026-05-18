@@ -431,71 +431,73 @@ class Database:
         old_image_paths = []
         try:
             with self.connection() as conn:
-                if image_paths is not None:
-                    old_rows = conn.execute(
-                        "SELECT image_path FROM cow_images WHERE cow_id = %s",
+                with conn.transaction():
+                    if image_paths is not None:
+                        old_rows = conn.execute(
+                            "SELECT image_path FROM cow_images WHERE cow_id = %s",
+                            (cow_id,),
+                        ).fetchall()
+                        old_image_paths = [row["image_path"] for row in old_rows]
+                    row = conn.execute(
+                        "SELECT owner_id FROM cows WHERE id = %s",
                         (cow_id,),
-                    ).fetchall()
-                    old_image_paths = [row["image_path"] for row in old_rows]
-                row = conn.execute(
-                    "SELECT owner_id FROM cows WHERE id = %s",
-                    (cow_id,),
-                ).fetchone()
-                if row is None:
-                    raise ValueError("소 정보를 찾을 수 없습니다.")
-                conn.execute(
-                    """
-                    UPDATE owners
-                    SET name = %s, phone = %s, farm_name = %s, farm_address = %s
-                    WHERE id = %s
-                    """,
-                    (owner_name, owner_phone, farm_name, farm_address, row["owner_id"]),
-                )
-                conn.execute(
-                    """
-                    UPDATE cows
-                    SET ear_tag = %s,
-                        name = %s,
-                        breed = %s,
-                        sex = %s,
-                        birth_date = NULLIF(%s, '')::date,
-                        notes = %s
-                    WHERE id = %s
-                    """,
-                    (ear_tag, cow_name, breed, sex, birth_date, notes, cow_id),
-                )
-                if image_paths is not None:
-                    conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
-                    with conn.cursor() as cur:
-                        cur.executemany(
-                            """
-                            INSERT INTO cow_images (cow_id, image_path)
-                            VALUES (%s, %s)
-                            """,
-                            [(cow_id, image_path) for image_path in image_paths],
-                        )
+                    ).fetchone()
+                    if row is None:
+                        raise ValueError("소 정보를 찾을 수 없습니다.")
+                    conn.execute(
+                        """
+                        UPDATE owners
+                        SET name = %s, phone = %s, farm_name = %s, farm_address = %s
+                        WHERE id = %s
+                        """,
+                        (owner_name, owner_phone, farm_name, farm_address, row["owner_id"]),
+                    )
+                    conn.execute(
+                        """
+                        UPDATE cows
+                        SET ear_tag = %s,
+                            name = %s,
+                            breed = %s,
+                            sex = %s,
+                            birth_date = NULLIF(%s, '')::date,
+                            notes = %s
+                        WHERE id = %s
+                        """,
+                        (ear_tag, cow_name, breed, sex, birth_date, notes, cow_id),
+                    )
+                    if image_paths is not None:
+                        conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
+                        with conn.cursor() as cur:
+                            cur.executemany(
+                                """
+                                INSERT INTO cow_images (cow_id, image_path)
+                                VALUES (%s, %s)
+                                """,
+                                [(cow_id, image_path) for image_path in image_paths],
+                            )
         except errors.UniqueViolation as exc:
             raise ValueError("이미 등록된 개체번호입니다.") from exc
         return old_image_paths
 
     def replace_cow_images(self, cow_id: int, image_paths: list[str]) -> list[str]:
         with self.connection() as conn:
-            exists = conn.execute("SELECT id FROM cows WHERE id = %s", (cow_id,)).fetchone()
-            if exists is None:
-                raise ValueError("소 정보를 찾을 수 없습니다.")
-            old_rows = conn.execute(
-                "SELECT image_path FROM cow_images WHERE cow_id = %s",
-                (cow_id,),
-            ).fetchall()
-            conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO cow_images (cow_id, image_path)
-                    VALUES (%s, %s)
-                    """,
-                    [(cow_id, image_path) for image_path in image_paths],
-                )
+            with conn.transaction():
+                exists = conn.execute("SELECT id FROM cows WHERE id = %s", (cow_id,)).fetchone()
+                if exists is None:
+                    raise ValueError("소 정보를 찾을 수 없습니다.")
+                old_rows = conn.execute(
+                    "SELECT image_path FROM cow_images WHERE cow_id = %s",
+                    (cow_id,),
+                ).fetchall()
+                conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """
+                        INSERT INTO cow_images (cow_id, image_path)
+                        VALUES (%s, %s)
+                        """,
+                        [(cow_id, image_path) for image_path in image_paths],
+                    )
         return [row["image_path"] for row in old_rows]
 
     def replace_cow_image(self, cow_id: int, image_path: str) -> list[str]:
@@ -503,24 +505,25 @@ class Database:
 
     def delete_cow(self, cow_id: int) -> list[str]:
         with self.connection() as conn:
-            row = conn.execute(
-                "SELECT owner_id FROM cows WHERE id = %s",
-                (cow_id,),
-            ).fetchone()
-            if row is None:
-                raise ValueError("소 정보를 찾을 수 없습니다.")
-            image_rows = conn.execute(
-                "SELECT image_path FROM cow_images WHERE cow_id = %s",
-                (cow_id,),
-            ).fetchall()
-            conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
-            conn.execute("DELETE FROM cows WHERE id = %s", (cow_id,))
-            remaining = conn.execute(
-                "SELECT COUNT(*) AS count FROM cows WHERE owner_id = %s",
-                (row["owner_id"],),
-            ).fetchone()["count"]
-            if remaining == 0:
-                conn.execute("DELETE FROM owners WHERE id = %s", (row["owner_id"],))
+            with conn.transaction():
+                row = conn.execute(
+                    "SELECT owner_id FROM cows WHERE id = %s",
+                    (cow_id,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError("소 정보를 찾을 수 없습니다.")
+                image_rows = conn.execute(
+                    "SELECT image_path FROM cow_images WHERE cow_id = %s",
+                    (cow_id,),
+                ).fetchall()
+                conn.execute("DELETE FROM cow_images WHERE cow_id = %s", (cow_id,))
+                conn.execute("DELETE FROM cows WHERE id = %s", (cow_id,))
+                remaining = conn.execute(
+                    "SELECT COUNT(*) AS count FROM cows WHERE owner_id = %s",
+                    (row["owner_id"],),
+                ).fetchone()["count"]
+                if remaining == 0:
+                    conn.execute("DELETE FROM owners WHERE id = %s", (row["owner_id"],))
         return [image["image_path"] for image in image_rows]
 
     def create_cow_with_owner(
@@ -539,30 +542,31 @@ class Database:
     ) -> int:
         try:
             with self.connection() as conn:
-                owner = conn.execute(
-                    """
-                    INSERT INTO owners (name, phone, farm_name, farm_address)
-                    VALUES (%s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (owner_name, owner_phone, farm_name, farm_address),
-                ).fetchone()
-                cow = conn.execute(
-                    """
-                    INSERT INTO cows (owner_id, ear_tag, name, breed, sex, birth_date, notes)
-                    VALUES (%s, %s, %s, %s, %s, NULLIF(%s, '')::date, %s)
-                    RETURNING id
-                    """,
-                    (owner["id"], ear_tag, cow_name, breed, sex, birth_date, notes),
-                ).fetchone()
-                with conn.cursor() as cur:
-                    cur.executemany(
+                with conn.transaction():
+                    owner = conn.execute(
                         """
-                        INSERT INTO cow_images (cow_id, image_path)
-                        VALUES (%s, %s)
+                        INSERT INTO owners (name, phone, farm_name, farm_address)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
                         """,
-                        [(cow["id"], image_path) for image_path in image_paths],
-                    )
+                        (owner_name, owner_phone, farm_name, farm_address),
+                    ).fetchone()
+                    cow = conn.execute(
+                        """
+                        INSERT INTO cows (owner_id, ear_tag, name, breed, sex, birth_date, notes)
+                        VALUES (%s, %s, %s, %s, %s, NULLIF(%s, '')::date, %s)
+                        RETURNING id
+                        """,
+                        (owner["id"], ear_tag, cow_name, breed, sex, birth_date, notes),
+                    ).fetchone()
+                    with conn.cursor() as cur:
+                        cur.executemany(
+                            """
+                            INSERT INTO cow_images (cow_id, image_path)
+                            VALUES (%s, %s)
+                            """,
+                            [(cow["id"], image_path) for image_path in image_paths],
+                        )
         except errors.UniqueViolation as exc:
             raise ValueError("이미 등록된 개체번호입니다.") from exc
         return int(cow["id"])
