@@ -262,7 +262,7 @@ POST /api/admin/backups/run
 POST /api/admin/index/rebuild
 ```
 
-프론트와 백엔드를 완전히 다른 도메인에서 운영하려면 쿠키 전송 정책 때문에
+프론트엔드와 백엔드를 완전히 다른 도메인에서 운영하려면 쿠키 전송 정책 때문에
 리버스 프록시에서 같은 사이트로 묶는 방식을 권장합니다. 다른 도메인을 써야 하면
 `SESSION_COOKIE_SAMESITE=None`, `SESSION_COOKIE_SECURE=true`, CORS 허용 도메인
 설정을 별도로 추가해야 합니다.
