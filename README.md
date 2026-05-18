@@ -1,8 +1,8 @@
 # Cow Nose ID
 
-소의 코 사진을 업로드하면 학습 완료된 YOLO `.pt` 모델로 코 영역을 crop하고, DINO embedding을 추출한 뒤 FAISS cosine similarity로 가장 유사한 개체를 찾습니다. 최상위 개체의 소유주와 개체 정보는 PostgreSQL에서 조회합니다. 기본 embedding 모델은 공개 접근 가능한 DINOv2입니다.
+소의 코 사진을 업로드하면 학습 완료된 YOLO `.pt` 모델로 코 영역을 잘라내고, DINO 임베딩을 추출한 뒤 FAISS 코사인 유사도로 가장 유사한 개체를 찾습니다. 최상위 개체의 소유주와 개체 정보는 PostgreSQL에서 조회합니다. 기본 임베딩 모델은 공개 접근 가능한 DINOv2입니다.
 
-프론트와 백엔드는 모두 Python입니다. 웹 화면은 Flask/Jinja로 렌더링하고, 같은 Flask 앱에서 JSON API도 제공합니다.
+웹 화면은 Flask/Jinja 템플릿으로 렌더링하고, 같은 Flask 앱에서 JSON API도 제공합니다.
 
 ## 대상 환경
 
@@ -30,7 +30,7 @@ cp .env.example .env
 `.env`를 실제 환경에 맞게 수정합니다.
 
 ```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cow_nose_id
+DATABASE_URL=postgresql://cow_app:change-this-password@localhost:5432/cow_nose_id
 FAISS_INDEX_PATH=./data/cow_nose.faiss
 FAISS_IDS_PATH=./data/cow_ids.json
 YOLO_WEIGHTS_PATH=/absolute/path/to/your/best.pt
@@ -83,7 +83,10 @@ UPLOAD_FILE_MODE=0o640
 ## DB 생성
 
 ```bash
-createdb cow_nose_id
+createuser cow_app
+createdb -O cow_app cow_nose_id
+psql -d cow_nose_id -c "ALTER USER cow_app WITH PASSWORD 'change-this-password';"
+export DATABASE_URL="postgresql://cow_app:change-this-password@localhost:5432/cow_nose_id"
 psql "$DATABASE_URL" -f sql/schema.sql
 ```
 
@@ -116,7 +119,7 @@ psql "$DATABASE_URL" -f sql/schema.sql
 백그라운드에서 자동 갱신합니다. `/admin/system`에서 갱신 상태를 확인하고
 수동 갱신도 실행할 수 있습니다.
 
-모든 POST 폼은 CSRF 토큰을 검사합니다. 업로드 요청 전체는 `MAX_REQUEST_MB`,
+모든 상태 변경 요청은 CSRF 토큰을 검사합니다. 업로드 요청 전체는 `MAX_REQUEST_MB`,
 개별 파일은 `MAX_UPLOAD_MB`로 제한합니다. 업로드 파일은 `MAX_IMAGE_PIXELS`,
 `ALLOWED_IMAGE_EXTENSIONS`, MIME 타입, 파일 시그니처,
 Pillow 이미지 검증, 확장자와 실제 이미지 형식 일치 검사를 통과해야 합니다.
@@ -135,10 +138,10 @@ rate limit과 감사 로그가 올바르게 동작합니다.
 
 ## 기존 사진 벡터화
 
-`cow_images`에 등록된 사진을 YOLO `.pt`로 crop하고 DINO embedding으로 변환합니다.
-기본 embedding 모델은 `facebook/dinov2-base`입니다.
+`cow_images`에 등록된 사진을 YOLO `.pt`로 잘라내고 DINO 임베딩으로 변환합니다.
+기본 임베딩 모델은 `facebook/dinov2-base`입니다.
 자동 갱신을 끈 환경에서는 관리자 화면에서 새 소를 등록한 뒤 아래 두 명령으로
-FAISS index를 다시 만들어야 식별 검색에 반영됩니다.
+FAISS 인덱스를 다시 만들어야 식별 검색에 반영됩니다.
 
 ```bash
 python scripts/embed_dataset.py \
@@ -146,7 +149,7 @@ python scripts/embed_dataset.py \
   --out-cow-ids data/cow_ids_source.json
 ```
 
-FAISS index를 생성합니다.
+FAISS 인덱스를 생성합니다.
 
 ```bash
 python scripts/build_index.py \
@@ -176,7 +179,7 @@ YOLO_WEIGHTS_PATH=./models/cow-nose-yolo.pt
 확인됩니다.
 
 ```bash
-python scripts/check_runtime.py
+python -m scripts.check_runtime
 ```
 
 통과하면 Flask를 실행합니다.
@@ -195,9 +198,9 @@ flask --app app.web run --host 0.0.0.0 --port 8000
 4. `/admin/system`에서 FAISS 인덱스 갱신 상태가 완료되는지 확인합니다.
 5. `/` 식별 화면에서 새 소 코 사진 1장을 올려 결과를 확인합니다.
 
-## 분리 프론트용 JSON API
+## 분리 프론트엔드용 JSON API
 
-프론트가 별도 앱이어도 백엔드는 Flask 세션 쿠키 기반 JSON API로 사용할 수 있습니다.
+화면을 별도 프론트엔드 앱으로 분리해도 백엔드는 Flask 세션 쿠키 기반 JSON API로 사용할 수 있습니다.
 상태를 변경하는 요청은 CSRF 보호가 적용됩니다.
 
 1. 먼저 `GET /api/csrf`를 호출해 `csrf_token`을 받습니다.
@@ -268,8 +271,8 @@ POST /api/admin/index/rebuild
 
 - `YOLO_WEIGHTS_PATH`는 이미 학습된 `.pt` 파일 경로를 지정합니다.
 - 등록 사진에서 코 검출이 전부 실패하면 `YOLO_CONF_THRESHOLD=0.05`처럼 낮춰 테스트해볼 수 있습니다.
-- 기본 embedding 모델은 `facebook/dinov2-base`입니다.
-- DINOv3(`facebook/dinov3-vitb16-pretrain-lvd1689m`)는 Hugging Face gated repo라서 인증과 접근 승인이 필요합니다.
+- 기본 임베딩 모델은 `facebook/dinov2-base`입니다.
+- DINOv3(`facebook/dinov3-vitb16-pretrain-lvd1689m`)는 Hugging Face 접근 제한 모델이라 인증과 접근 승인이 필요합니다.
 - RTX 4060을 쓰려면 `DEVICE=cuda:0`으로 둡니다.
 - FAISS는 현재 `faiss-cpu` 기준입니다. 검색 벡터 수가 매우 많아 CPU 검색이 병목이면 별도 conda 환경에서 GPU FAISS를 검토하세요.
 - 임계값 `SIMILARITY_THRESHOLD`는 실제 농장 데이터로 검증하면서 조정해야 합니다.
@@ -280,7 +283,7 @@ POST /api/admin/index/rebuild
 - `RATE_LIMIT_STORAGE_URI=memory://`는 단일 프로세스 테스트용입니다. 운영에서 여러 프로세스나 서버를 쓰면 Redis 같은 공유 저장소를 지정하세요.
 - 소 등록처럼 여러 이미지를 한 번에 올리는 요청은 `MAX_REQUEST_MB`가 적용되고, 각 이미지 1장에는 `MAX_UPLOAD_MB`가 적용됩니다.
 - 수동 백업과 FAISS 인덱스 갱신은 백그라운드 작업으로 실행되며, `/admin/system`에서 상태를 확인할 수 있습니다.
-- 앱 시작 시 DB connection pool을 열고 스키마와 초기 관리자 계정을 확인합니다.
+- 앱 시작 시 DB 커넥션 풀을 열고 스키마와 초기 관리자 계정을 확인합니다.
 - FAISS 인덱스 갱신은 같은 프로세스 안에서 YOLO/DINO 모델을 재사용합니다.
 
 ## 보안 점검
@@ -298,7 +301,7 @@ python -m pip install pip-audit
 python scripts/audit_dependencies.py
 ```
 
-DB에는 없지만 `UPLOAD_DIR`에 남은 고아 업로드 파일은 dry-run으로 먼저 확인한 뒤 삭제할 수 있습니다.
+DB에는 없지만 `UPLOAD_DIR`에 남은 고아 업로드 파일은 dry-run 모드로 먼저 확인한 뒤 삭제할 수 있습니다.
 
 ```bash
 python scripts/cleanup_uploads.py
