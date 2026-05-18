@@ -21,7 +21,7 @@ CUDA를 써야 하면 새 venv를 만들기보다 학습에 사용했던 PyTorch
 
 ```bash
 cd /path/to/cow-nose-id
-# 예: conda activate 학습에쓴환경
+# 예: conda activate 학습에_쓴_환경
 pip install -U pip
 pip install -r requirements.txt
 cp .env.example .env
