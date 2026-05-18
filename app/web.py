@@ -70,6 +70,7 @@ def create_app() -> Flask:
     app.config["BOOTSTRAPPED_ADMIN"] = False
     configure_logging(app)
     limiter.init_app(app)
+    initialize_database(app)
     start_backup_scheduler(settings, app.logger)
 
     @app.context_processor
@@ -78,12 +79,6 @@ def create_app() -> Flask:
 
     @app.before_request
     def prepare_request() -> None:
-        database.open()
-        if not app.config["BOOTSTRAPPED_ADMIN"]:
-            database.ensure_schema()
-            database.ensure_security_schema()
-            database.bootstrap_admin(settings.bootstrap_admin_username, settings.bootstrap_admin_password)
-            app.config["BOOTSTRAPPED_ADMIN"] = True
         validate_csrf()
 
     @app.after_request
@@ -910,6 +905,15 @@ def reset_pipeline() -> None:
     global pipeline
     with pipeline_lock:
         pipeline = None
+
+
+def initialize_database(app: Flask) -> None:
+    database.open()
+    database.ensure_schema()
+    database.ensure_security_schema()
+    database.bootstrap_admin(settings.bootstrap_admin_username, settings.bootstrap_admin_password)
+    app.config["BOOTSTRAPPED_ADMIN"] = True
+    app.logger.info("Database pool opened and schema verified.")
 
 
 def upload_too_large_message() -> str:

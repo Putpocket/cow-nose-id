@@ -280,6 +280,8 @@ POST /api/admin/index/rebuild
 - `RATE_LIMIT_STORAGE_URI=memory://`는 단일 프로세스 테스트용입니다. 운영에서 여러 프로세스나 서버를 쓰면 Redis 같은 공유 저장소를 지정하세요.
 - 소 등록처럼 여러 이미지를 한 번에 올리는 요청은 `MAX_REQUEST_MB`가 적용되고, 각 이미지 1장에는 `MAX_UPLOAD_MB`가 적용됩니다.
 - 수동 백업과 FAISS 인덱스 갱신은 백그라운드 작업으로 실행되며, `/admin/system`에서 상태를 확인할 수 있습니다.
+- 앱 시작 시 DB connection pool을 열고 스키마와 초기 관리자 계정을 확인합니다.
+- FAISS 인덱스 갱신은 같은 프로세스 안에서 YOLO/DINO 모델을 재사용합니다.
 
 ## 보안 점검
 
@@ -294,4 +296,11 @@ python -m scripts.check_runtime
 ```bash
 python -m pip install pip-audit
 python scripts/audit_dependencies.py
+```
+
+DB에는 없지만 `UPLOAD_DIR`에 남은 고아 업로드 파일은 dry-run으로 먼저 확인한 뒤 삭제할 수 있습니다.
+
+```bash
+python scripts/cleanup_uploads.py
+python scripts/cleanup_uploads.py --delete
 ```

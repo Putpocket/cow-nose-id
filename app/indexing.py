@@ -15,9 +15,15 @@ from app.services.detector import NoseDetector
 from app.services.embedder import DinoEmbedder
 
 
+_model_cache = {
+    "key": None,
+    "detector": None,
+    "embedder": None,
+}
+
+
 def rebuild_faiss_index(settings: Settings, logger: logging.Logger) -> int:
-    detector = NoseDetector(settings.yolo_weights_path, settings.device, settings.yolo_conf_threshold)
-    embedder = DinoEmbedder(settings.dino_model_name, settings.device)
+    detector, embedder = get_indexing_models(settings, logger)
 
     pool = ConnectionPool(settings.database_url, kwargs={"row_factory": dict_row}, min_size=0, max_size=10)
     try:
@@ -74,3 +80,23 @@ def rebuild_faiss_index(settings: Settings, logger: logging.Logger) -> int:
     temp_index.replace(index_path)
     temp_ids.replace(ids_path)
     return len(cow_ids)
+
+
+def get_indexing_models(settings: Settings, logger: logging.Logger) -> tuple[NoseDetector, DinoEmbedder]:
+    cache_key = (
+        settings.yolo_weights_path,
+        settings.yolo_conf_threshold,
+        settings.dino_model_name,
+        settings.device,
+    )
+    if _model_cache["key"] != cache_key:
+        logger.info("Loading indexing models.")
+        _model_cache["detector"] = NoseDetector(
+            settings.yolo_weights_path,
+            settings.device,
+            settings.yolo_conf_threshold,
+        )
+        _model_cache["embedder"] = DinoEmbedder(settings.dino_model_name, settings.device)
+        _model_cache["key"] = cache_key
+        logger.info("Indexing models loaded.")
+    return _model_cache["detector"], _model_cache["embedder"]
