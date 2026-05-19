@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>계정 관리 · Cow Nose ID</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=5' }}" />
   </head>
   <body>
     <main class="shell">
@@ -22,7 +22,7 @@
         </form>
       </header>
 
-      <section class="admin-layout">
+      <section class="admin-layout admin-users-layout">
         <form class="form-panel" action="{{ url_for('create_user') }}" method="post">
           <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />
           <div>
@@ -42,13 +42,19 @@
             <span>비밀번호</span>
             <input name="password" type="password" autocomplete="new-password" required />
           </label>
-          <label>
+          <div class="form-field">
             <span>권한</span>
-            <select name="role">
-              <option value="user">일반</option>
-              <option value="admin">관리자</option>
-            </select>
-          </label>
+            <span class="choice-row">
+              <label class="choice-pill">
+                <input name="role" type="radio" value="user" checked />
+                <span>일반</span>
+              </label>
+              <label class="choice-pill">
+                <input name="role" type="radio" value="admin" />
+                <span>관리자</span>
+              </label>
+            </span>
+          </div>
           <button type="submit">추가</button>
         </form>
 
@@ -69,13 +75,13 @@
               {% for user in users %}
                 <tr>
                   <td>{{ user.username }}</td>
-                  <td>{{ "관리자" if user.role == "admin" else "일반" }}</td>
-                  <td>
+                  <td class="nowrap">{{ "관리자" if user.role == "admin" else "일반" }}</td>
+                  <td class="nowrap">
                     {{ "활성" if user.status == "active" else "비활성" }}
                     {% if user.must_change_password %} / 변경 필요{% endif %}
                   </td>
-                  <td>{{ user.last_login_at or "-" }}</td>
-                  <td>{{ user.created_at }}</td>
+                  <td class="nowrap">{{ user.last_login_at|kst_datetime }}</td>
+                  <td class="nowrap">{{ user.created_at|kst_datetime }}</td>
                   <td class="table-actions">
                     <form action="{{ url_for('update_user_password', user_id=user.id) }}" method="post">
                       <input name="csrf_token" type="hidden" value="{{ csrf_token() }}" />

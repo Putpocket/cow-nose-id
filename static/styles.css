@@ -109,6 +109,10 @@ body {
   padding: 16px;
 }
 
+.result-panel {
+  overflow-x: auto;
+}
+
 .upload-panel {
   display: flex;
   flex-direction: column;
@@ -182,6 +186,7 @@ button {
   background: #2f2f2f;
   color: #ffffff;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -257,11 +262,20 @@ button:disabled {
   gap: 12px;
 }
 
+.admin-users-layout {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.admin-users-layout table {
+  min-width: 760px;
+}
+
 .preview-spacer {
   margin-top: 20px;
 }
 
-label {
+label,
+.form-field {
   display: grid;
   gap: 5px;
   color: #444444;
@@ -293,6 +307,36 @@ input[type="file"] {
   padding: 10px;
 }
 
+.choice-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.choice-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid #bdbdbd;
+  color: #222222;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.choice-pill input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.choice-pill:has(input:checked) {
+  border-color: #222222;
+  background: #2f2f2f;
+  color: #ffffff;
+}
+
 table {
   width: 100%;
   margin-top: 12px;
@@ -312,6 +356,7 @@ th {
   font-size: 13px;
   font-weight: 600;
   background: #f5f5f5;
+  white-space: nowrap;
 }
 
 tbody tr:hover {
@@ -334,6 +379,10 @@ tbody tr:hover {
 .table-actions input[type="password"] {
   width: 150px;
   height: 32px;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .inline-form {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>시스템 · Cow Nose ID</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=4' }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') ~ '?v=5' }}" />
   </head>
   <body>
     <main class="shell">
@@ -49,8 +49,8 @@
             <tbody>
               {% for backup in backups %}
                 <tr>
-                  <td>{{ backup.name }}</td>
-                  <td>{{ backup.size }} bytes</td>
+                  <td class="nowrap">{{ backup.name }}</td>
+                  <td class="nowrap">{{ backup.size }} bytes</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -94,11 +94,11 @@
           <tbody>
             {% for log in audit_logs %}
               <tr>
-                <td>{{ log.created_at }}</td>
-                <td>{{ log.actor_username or "-" }}</td>
-                <td>{{ log.action }}</td>
-                <td>{{ log.target_type or "-" }} {{ log.target_id or "" }}</td>
-                <td>{{ log.ip_address or "-" }}</td>
+                <td class="nowrap">{{ log.created_at|kst_datetime }}</td>
+                <td class="nowrap">{{ log.actor_username or "-" }}</td>
+                <td class="nowrap">{{ log.action }}</td>
+                <td class="nowrap">{{ log.target_type or "-" }} {{ log.target_id or "" }}</td>
+                <td class="nowrap">{{ log.ip_address or "-" }}</td>
                 <td>{{ log.detail or "-" }}</td>
               </tr>
             {% endfor %}

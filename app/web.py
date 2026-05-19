@@ -6,9 +6,10 @@ import logging
 import os
 import secrets
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from functools import wraps
+from ipaddress import ip_address
 from pathlib import Path
 from uuid import uuid4
 
@@ -31,7 +32,7 @@ from app.services.pipeline import IdentificationPipeline
 settings = get_settings()
 Image.MAX_IMAGE_PIXELS = settings.max_image_pixels
 database = Database(settings)
-limiter = Limiter(key_func=get_remote_address, storage_uri=settings.rate_limit_storage_uri)
+limiter = Limiter(key_func=lambda: client_ip(), storage_uri=settings.rate_limit_storage_uri)
 pipeline: IdentificationPipeline | None = None
 pipeline_lock = threading.Lock()
 backup_lock = threading.Lock()
@@ -73,6 +74,7 @@ def create_app() -> Flask:
     limiter.init_app(app)
     initialize_database(app)
     start_backup_scheduler(settings, app.logger)
+    app.jinja_env.filters["kst_datetime"] = format_kst_datetime
 
     @app.context_processor
     def inject_security_helpers():
@@ -848,7 +850,7 @@ def create_app() -> Flask:
     @app.errorhandler(RateLimitExceeded)
     def rate_limit_exceeded(_error):
         message = "요청이 너무 많습니다. 잠시 후 다시 시도하세요."
-        app.logger.warning("Rate limit exceeded: path=%s ip=%s", request.path, safe_log_value(request.remote_addr, 80))
+        app.logger.warning("Rate limit exceeded: path=%s ip=%s", request.path, safe_log_value(client_ip(), 80))
         if request.path.startswith("/api/"):
             return json_error(message, 429)
         if request.path == "/login":
@@ -1051,7 +1053,7 @@ def audit(
             action=action,
             target_type=target_type,
             target_id=target_id,
-            ip_address=safe_log_value(request.remote_addr, 128),
+            ip_address=safe_log_value(client_ip(), 128),
             user_agent=safe_log_value(request.headers.get("User-Agent"), 256),
             detail=safe_log_value(detail, 500),
         )
@@ -1365,6 +1367,25 @@ def json_error(message: str, status: int):
     return jsonify({"error": message}), status
 
 
+def client_ip() -> str | None:
+    if settings.proxy_fix_enabled:
+        return request.remote_addr
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for and is_private_remote_addr(request.remote_addr):
+        return forwarded_for.split(",", 1)[0].strip()
+    return get_remote_address()
+
+
+def is_private_remote_addr(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        parsed = ip_address(value.rsplit("%", 1)[0])
+    except ValueError:
+        return False
+    return parsed.is_private or parsed.is_loopback
+
+
 def serialize_user(user: dict | None) -> dict | None:
     if user is None:
         return None
@@ -1375,6 +1396,24 @@ def serialize_user(user: dict | None) -> dict | None:
         "status": user["status"],
         "must_change_password": user["must_change_password"],
     }
+
+
+def format_kst_datetime(value: object) -> str:
+    if not value:
+        return "-"
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return "-"
+        try:
+            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return text.split(".")[0].replace("+00", "")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def serialize_cow_record(cow: dict) -> dict:

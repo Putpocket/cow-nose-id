@@ -45,6 +45,8 @@ def main() -> int:
         warnings.append("MAX_REQUEST_MB가 등록 최대 이미지 수와 개별 파일 제한을 감당하기에 작습니다.")
     if settings.proxy_fix_enabled:
         warnings.append("PROXY_FIX_ENABLED=true일 때는 신뢰할 수 있는 프록시만 X-Forwarded-* 헤더를 전달하도록 제한해야 합니다.")
+    else:
+        warnings.append("리버스 프록시 뒤에서 운영 중이면 PROXY_FIX_ENABLED=true가 필요합니다. 꺼져 있으면 접속자 공인 IP 대신 프록시 내부 IP가 기록됩니다.")
     if not Path(settings.upload_dir).is_absolute():
         warnings.append("UPLOAD_DIR은 운영에서 앱 루트 밖 절대 경로를 권장합니다. 예: /var/lib/cow-muzzle/uploads")
     if not Path(settings.backup_dir).is_absolute():
